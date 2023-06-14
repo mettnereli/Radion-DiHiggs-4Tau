@@ -25,8 +25,11 @@ muon_mask = (ak.num(muons) > 0) & ak.all(muons.pt > 30, axis=1) & ak.all(abs(muo
 boostedTau_mask = (ak.num(boostedTaus) > 0) & ak.all(boostedTaus.pt > 30, axis=1)
 
 
+dr = events[(ak.num(muons) > 0) & (ak.num(boostedTaus) > 0)].Muon[:,0].delta_r(events[(ak.num(muons) > 0) & (ak.num(boostedTaus) > 0)].boostedTau[:,0])
+dr_mask = ak.all(dr > .1, axis = 0)
+
 #combine all cuts into one mask
-mask = muon_mask & boostedTau_mask
+mask = muon_mask & boostedTau_mask & dr_mask
 
 selected_events = events[mask]
 
