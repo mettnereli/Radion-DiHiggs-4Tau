@@ -10,26 +10,28 @@ from coffea.nanoevents.methods import vector
 
 #read in file
 fname = "./NANO_NANO_3.root"
-events = NanoEventsFactory.from_root(
+event = NanoEventsFactory.from_root(
     fname,
     schemaclass=NanoAODSchema.v6,
 ).events()
 
 #define shortcut
+events = event[(ak.num(event.Muon) > 0) & (ak.num(event.boostedTau) > 0)]
 muons = events.Muon
 boostedTaus = events.boostedTau
 
 
 #mask cuts for all events
-muon_mask = (ak.num(muons) > 0) & ak.all(muons.pt > 30, axis=1) & ak.all(abs(muons.eta) < 2.5, axis=1) 
-boostedTau_mask = (ak.num(boostedTaus) > 0) & ak.all(boostedTaus.pt > 30, axis=1)
+muon_mask =  ak.all(muons.pt > 30, axis=1) & ak.all(abs(muons.eta) < 2.5, axis=1) 
+boostedTau_mask = ak.all(boostedTaus.pt > 30, axis=1) & ak.all(boostedTaus.rawDeepTau2017v2p1VSmu > .9, axis=1)
+charge_mask = ak.any((muons[:,0].charge == 1) & (boostedTaus[:,0].charge == -1), axis=0) & ak.any((muons[:,0].charge == -1) & (boostedTaus[:,0].charge == 1), axis=0)
+met_mask = events.MET.pt > 30
 
-
-dr = events[(ak.num(muons) > 0) & (ak.num(boostedTaus) > 0)].Muon[:,0].delta_r(events[(ak.num(muons) > 0) & (ak.num(boostedTaus) > 0)].boostedTau[:,0])
-dr_mask = ak.all(dr > .1, axis = 0)
+dr = events.Muon[:,0].delta_r(events.boostedTau[:,0])
+dr_mask = dr > .1
 
 #combine all cuts into one mask
-mask = muon_mask & boostedTau_mask & dr_mask
+mask = muon_mask & boostedTau_mask & charge_mask & dr_mask & met_mask
 
 selected_events = events[mask]
 
@@ -59,13 +61,11 @@ boostedTauVec = ak.zip(
 #combine 4-vectors
 muTauVec = muVec.add(boostedTauVec)
 
-
-
 #plot and save
 fig, ax = plt.subplots()
-h = Hist(hist.axis.Regular(50,0,2,name="mass",label="GeV"))
+h = Hist(hist.axis.Regular(50,0,150,name="mass",label="GeV"))
 h.fill(muTauVec.mass)
-hep.histplot(h)
+hep.histplot(h, w2=None, histtype = 'fill')
 ax.set_title("Muon Vector + Boosted Tau Vector Mass")
 ax.set_xlabel("Mass (GeV)")
 fig.savefig("muTauVec_mass.png")
