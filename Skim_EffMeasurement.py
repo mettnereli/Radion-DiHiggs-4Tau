@@ -60,12 +60,26 @@ boostedTauVec = ak.zip(
 
 #combine 4-vectors
 muTauVec = muVec.add(boostedTauVec)
+print("Number of Boosted Tau Before: ")
+print(ak.num(events.boostedTau, axis=0))
+print("Number of Leading Boosted Tau After: ")
+print(ak.num(selected_events.boostedTau, axis=0))
 
 #plot and save
-fig, ax = plt.subplots()
+
+fig, axs = plt.subplots(1, 2, figsize=(9, 4))
 h = Hist(hist.axis.Regular(50,0,150,name="mass",label="GeV"))
 h.fill(muTauVec.mass)
-hep.histplot(h, w2=None, histtype = 'fill')
-ax.set_title("Muon Vector + Boosted Tau Vector Mass")
-ax.set_xlabel("Mass (GeV)")
-fig.savefig("muTauVec_mass.png")
+h2 = Hist(hist.axis.Regular(11,0,10, name="multiplicity", label="num boosted Tau"))
+h2.fill(ak.num(selected_events.boostedTau, axis=1))
+
+
+hep.histplot(h, ax=axs[0],w2=None, histtype = 'fill')
+axs[0].set_title("Muon Vector + Boosted Tau Vector Mass")
+axs[0].set_xlabel("Mass (GeV)")
+
+hep.histplot(h2, ax=axs[1],w2=None, histtype = 'fill')
+axs[1].set_title("Boosted Tau Multiplicity")
+axs[1].set_xlabel("Num of Boosted Tau / event")
+
+fig.savefig("MuTauMass_multiplicity.png")
