@@ -1,85 +1,102 @@
+import sys
 import awkward as ak
 import uproot
 import hist
 from hist import Hist
 import matplotlib.pyplot as plt
 import mplhep as hep
+from coffea import processor, nanoevents
 from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
-from coffea.nanoevents.methods import vector
+
+class MyProcessor(processor.ProcessorABC):
+   def __init__(self):
+      pass
+
+   def process(self,events):
+      dataset = events.metadata['dataset']
+
+      #define shortcuts
+      events = events[(ak.num(events.Muon) > 0) & (ak.num(events.boostedTau) > 0)]
+      muons = events.Muon
+      boostedTaus = events.boostedTau
+      IsoLep1Value = muons.pfRelIso04_all/muons.pt
+     
+      #mask cuts for all events
+      muon_mask =  (ak.all(muons.pt > 28, axis=1) 
+                    & ak.all(abs(muons.eta) <= 2.5, axis=1) 
+                    & ak.all(muons.pfRelIso04_all < 1, axis=1)
+                    & ak.all(muons.dxy >= .0001, axis=1) 
+                    & ak.all(muons.dz >= .0001, axis=1)
+                    & ak.all(IsoLep1Value <= 30, axis=1))
+      
+      boostedTau_mask =  (ak.all(boostedTaus.pt > 28, axis=1) 
+                         & ak.all(abs(boostedTaus.eta) <= 2.5, axis=1)
+                         & ak.all(boostedTaus.rawDeepTau2017v2p1VSmu > .3, axis=1)
+                         & ak.all(boostedTaus.rawDeepTau2017v2p1VSe > .3, axis=1) 
+                         & ak.all(boostedTaus.idDecayModeOldDMs >= 1, axis=1))
+      met_mask = events.MET.pt > 30
+      dr = events.Muon[:,0].delta_r(events.boostedTau[:,0])
+      dr_mask = ak.any(dr > .1, axis=0) & ak.any(dr < .8, axis=0)
+      
+      #combine all cuts into one mask
+      mask = muon_mask & boostedTau_mask & met_mask  & dr_mask
+      selected_events = events[mask]
+
+      same_sign = ak.any((muons[:,0].charge == 1) & (boostedTaus[:,0].charge == 1), axis=0) & ak.any((muons[:,0].charge == -1) & (boostedTaus[:,0].charge == -1), axis=0)
+      opposite_sign = ak.any((muons[:,0].charge == 1) & (boostedTaus[:,0].charge == -1), axis=0) & ak.any((muons[:,0].charge == -1) & (boostedTaus[:,0].charge == 1), axis=0)
+      VVLooseNum = ak.all(selected_events.boostedTau.VVLooseIsolationMVArun2017v2DBoldDMwLT2017 > .5, axis =1)
+      print("Number of Leading Boosted Tau After: ")
+      print(ak.num(selected_events.boostedTau, axis=0))
+
+      histogram = Hist.new.Regular(100,0,500, name="pt", label ="$p_T (GeV)").StrCat(["opposite", "same"], name="sign", label = "Sign").StrCat(["denominator", "numerator"], name="fraction", label="Fraction").Double()
+      histogram.fill(sign="opposite", fraction="denominator", pt = selected_events.boostedTau[opposite_sign][:,0].pt)
+      histogram.fill(sign="opposite", fraction="numerator", pt = selected_events.boostedTau[opposite_sign & VVLooseNum][:,0].pt)
+      histogram.fill(sign="same", fraction="denominator", pt = selected_events.boostedTau[same_sign][:,0].pt)
+      histogram.fill(sign="same", fraction="numerator", pt = selected_events.boostedTau[same_sign & VVLooseNum][:,0].pt)
+
+      return {
+         dataset: {
+            "entries": len(events),
+            "events": selected_events,
+            "hist": histogram,
+         }
+      }
+   
+   def postprocess(self, accumulator):
+      pass
+   
+
+if __name__ == "__main__":
+   dataset = sys.argv[1]
+   #read in file
+   fname = "./NANO_NANO_3.root"
+   events = NanoEventsFactory.from_root(
+      fname,
+      schemaclass=NanoAODSchema.v6,
+      metadata={"dataset": dataset},
+   ).events()
+
+   p = MyProcessor()
+   out = p.process(events)
 
 
-#read in file
-fname = "./NANO_NANO_3.root"
-event = NanoEventsFactory.from_root(
-    fname,
-    schemaclass=NanoAODSchema.v6,
-).events()
+   #plot and save
 
-#define shortcut
-events = event[(ak.num(event.Muon) > 0) & (ak.num(event.boostedTau) > 0)]
-muons = events.Muon
-boostedTaus = events.boostedTau
+   fig, axs = plt.subplots(2, 2, figsize=(20, 20))
+   out[dataset]["hist"][:,"same","denominator"].plot1d(ax=axs[0, 0])
+   out[dataset]["hist"][:,"same","denominator"].plot1d(ax=axs[0, 1])
+   out[dataset]["hist"][:,"opposite","numerator"].plot1d(ax=axs[1, 0])
+   out[dataset]["hist"][:,"same","numerator"].plot1d(ax=axs[1, 1])
 
+   axs[0, 0].set_title("OS_Denom_$p_T$")
+   axs[0, 1].set_title("SS_Denom_$p_T$")
+   axs[1, 0].set_title("OS_Numerator_$p_T$")
+   axs[1, 1].set_title("SS_Numerator_$p_T$")
 
-#mask cuts for all events
-muon_mask =  ak.all(muons.pt > 30, axis=1) & ak.all(abs(muons.eta) < 2.5, axis=1) 
-boostedTau_mask = ak.all(boostedTaus.pt > 30, axis=1) & ak.all(boostedTaus.rawDeepTau2017v2p1VSmu > .9, axis=1)
-charge_mask = ak.any((muons[:,0].charge == 1) & (boostedTaus[:,0].charge == -1), axis=0) & ak.any((muons[:,0].charge == -1) & (boostedTaus[:,0].charge == 1), axis=0)
-met_mask = events.MET.pt > 30
-
-dr = events.Muon[:,0].delta_r(events.boostedTau[:,0])
-dr_mask = dr > .1
-
-#combine all cuts into one mask
-mask = muon_mask & boostedTau_mask & charge_mask & dr_mask & met_mask
-
-selected_events = events[mask]
-
-#make 4-vectors
-muVec = ak.zip(
-   {
-    "pt": selected_events.Muon[:,0].pt,
-    "eta": selected_events.Muon[:,0].eta,
-    "phi": selected_events.Muon[:,0].phi,
-    "mass": selected_events.Muon[:,0].mass,
-   },
-   with_name="PtEtaPhiMLorentzVector",
-   behavior=vector.behavior,
-)
-
-boostedTauVec = ak.zip(
-   {
-    "pt": selected_events.boostedTau[:,0].pt,
-    "eta": selected_events.boostedTau[:,0].eta,
-    "phi": selected_events.boostedTau[:,0].phi,
-    "mass": selected_events.boostedTau[:,0].mass,
-   },
-   with_name="PtEtaPhiMLorentzVector",
-   behavior=vector.behavior,
-)
-
-#combine 4-vectors
-muTauVec = muVec.add(boostedTauVec)
-print("Number of Boosted Tau Before: ")
-print(ak.num(events.boostedTau, axis=0))
-print("Number of Leading Boosted Tau After: ")
-print(ak.num(selected_events.boostedTau, axis=0))
-
-#plot and save
-
-fig, axs = plt.subplots(1, 2, figsize=(9, 4))
-h = Hist(hist.axis.Regular(50,0,150,name="mass",label="GeV"))
-h.fill(muTauVec.mass)
-h2 = Hist(hist.axis.Regular(11,0,10, name="multiplicity", label="num boosted Tau"))
-h2.fill(ak.num(selected_events.boostedTau, axis=1))
+   axs[0, 0].set_xlabel("$p_T$ (GeV)")
+   axs[0, 1].set_xlabel("$p_T$ (GeV)")
+   axs[1, 0].set_xlabel("$p_T$ (GeV)")
+   axs[1, 1].set_xlabel("$p_T$ (GeV)")
 
 
-hep.histplot(h, ax=axs[0],w2=None, histtype = 'fill')
-axs[0].set_title("Muon Vector + Boosted Tau Vector Mass")
-axs[0].set_xlabel("Mass (GeV)")
-
-hep.histplot(h2, ax=axs[1],w2=None, histtype = 'fill')
-axs[1].set_title("Boosted Tau Multiplicity")
-axs[1].set_xlabel("Num of Boosted Tau / event")
-
-fig.savefig("MuTauMass_multiplicity.png")
+   fig.savefig("pT_Fake.png")
