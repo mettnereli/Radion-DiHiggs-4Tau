@@ -48,11 +48,11 @@ class MyProcessor(processor.ProcessorABC):
       print("Number of Leading Boosted Tau After: ")
       print(ak.num(selected_events.boostedTau, axis=0))
 
-      histogram = Hist.new.Regular(100,0,500, name="pt", label ="$p_T (GeV)").StrCat(["opposite", "same"], name="sign", label = "Sign").StrCat(["denominator", "numerator"], name="fraction", label="Fraction").Double()
-      histogram.fill(sign="opposite", fraction="denominator", pt = selected_events.boostedTau[opposite_sign][:,0].pt)
-      histogram.fill(sign="opposite", fraction="numerator", pt = selected_events.boostedTau[opposite_sign & VVLooseNum][:,0].pt)
-      histogram.fill(sign="same", fraction="denominator", pt = selected_events.boostedTau[same_sign][:,0].pt)
-      histogram.fill(sign="same", fraction="numerator", pt = selected_events.boostedTau[same_sign & VVLooseNum][:,0].pt)
+      histogram = Hist.new.Regular(10,0,500, name="pt", label ="$p_T (GeV)").StrCat(["opposite", "same"], name="sign", label = "Sign").StrCat(["denominator", "numerator"], name="fraction", label="Fraction").Double()
+      histogram.fill(sign="opposite", fraction="denominator", pt = ak.flatten(selected_events.boostedTau[opposite_sign].pt, axis=None))
+      histogram.fill(sign="opposite", fraction="numerator", pt = ak.flatten(selected_events.boostedTau[opposite_sign & VVLooseNum].pt, axis=None))
+      histogram.fill(sign="same", fraction="denominator", pt = ak.flatten(selected_events.boostedTau[same_sign].pt, axis=None))
+      histogram.fill(sign="same", fraction="numerator", pt = ak.flatten(selected_events.boostedTau[same_sign & VVLooseNum].pt, axis=None))
 
       return {
          dataset: {
