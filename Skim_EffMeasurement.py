@@ -83,7 +83,7 @@ if __name__ == "__main__":
    #plot and save
 
    fig, axs = plt.subplots(2, 2, figsize=(20, 20))
-   out[dataset]["hist"][:,"same","denominator"].plot1d(ax=axs[0, 0])
+   out[dataset]["hist"][:,"opposite","denominator"].plot1d(ax=axs[0, 0])
    out[dataset]["hist"][:,"same","denominator"].plot1d(ax=axs[0, 1])
    out[dataset]["hist"][:,"opposite","numerator"].plot1d(ax=axs[1, 0])
    out[dataset]["hist"][:,"same","numerator"].plot1d(ax=axs[1, 1])
