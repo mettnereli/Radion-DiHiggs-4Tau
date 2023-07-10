@@ -47,8 +47,7 @@ class MyProcessor(processor.ProcessorABC):
       
       boostedTau_mask =  (ak.all(boostedTaus.pt > 20, axis=1) 
                          & ak.all(abs(boostedTaus.eta) <= 2.5, axis=1)
-                         & ak.all(boostedTaus.rawIsodR03 > .7, axis=1)
-                         & ak.all(boostedTaus.chargedIso > .7, axis=1))
+                         & ak.all(boostedTaus.rawIsodR03 > .7, axis=1))
       met_mask = events.MET.pt > 30
       dr = events.Muon[:,0].delta_r(events.boostedTau[:,0])
       dr_mask = ak.any(dr > .1, axis=0) & ak.any(dr < .8, axis=0)
