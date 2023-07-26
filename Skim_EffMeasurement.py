@@ -49,12 +49,15 @@ class MyProcessor(processor.ProcessorABC):
          os.remove(f)
       self.write(f, "Inital Events: ")
       self.write(f, ak.num(events, axis=0))
+      self.write(f, ak.num(ak.flatten(events.Muon, axis=1), axis=0))
+      self.write(f, ak.num(ak.flatten(events.boostedTau, axis=1), axis=0)) 
       
       #define shortcuts
-      events = events[(ak.num(events.Muon) > 0) & (ak.num(events.boostedTau) > 0)]
+      events = events[(ak.num(events.Muon) > 0) & (ak.num(events.boostedTau) > 0) & (events.MET.pt > 30)]
       muons = events.Muon
       boostedTaus = events.boostedTau
 
+      #First log
       self.write(f, "Events containing Muon and boosted Tau (+ muon and boosted Taus): ")
       self.write(f, ak.num(events, axis=0))
       self.write(f, ak.num(ak.flatten(events.Muon, axis=1), axis=0))
@@ -62,61 +65,56 @@ class MyProcessor(processor.ProcessorABC):
 
 
       #mask cuts for all events
-      muon_mask =  (ak.any(muons.pt > 28, axis=1) 
-                    & ak.all(abs(muons.eta) < 2.4, axis=1))
+      muon_mask =  ((muons.pt > 28)
+                    & (np.absolute(muons.eta) < 2.4))
       
-      boostedTau_mask =  (ak.all(boostedTaus.pt > 20, axis=1) 
-                         & ak.all(abs(boostedTaus.eta) <= 2.5, axis=1)
-                         & ak.all(boostedTaus.rawIsodR03 > .7, axis=1)
-                         & ak.all(boostedTaus.idAntiMu == 3, axis = 1))
-      met_mask = events.MET.pt > 30
+      boostedTau_mask = ((boostedTaus.pt > 20) 
+                         & (np.absolute(boostedTaus.eta) <= 2.5)
+                         & (boostedTaus.rawIsodR03 > .5)
+                         & (boostedTaus.idAntiMu == 3))
       
       #Apply all masks
-      mask = muon_mask & boostedTau_mask & met_mask
-      events = events[mask]
+      boostedTaus = boostedTaus[boostedTau_mask & (ak.num(muons[muon_mask]) > 0)]
+      muons = muons[muon_mask & ak.num(boostedTaus) > 0]
+      events = events[(ak.num(boostedTaus) > 0)]
 
 
+      #2nd Log
       self.write(f, "After event cuts (muon and tau): ")
       self.write(f, ak.num(events, axis=0))
-      self.write(f, ak.num(ak.flatten(events.Muon, axis=1), axis=0))
-      self.write(f, ak.num(ak.flatten(events.boostedTau, axis=1), axis=0))
-
-
-      #Pair up boostedTaus with a muon
-      muon_boostedTau_pairs = ak.cartesian({'muon': events.Muon, 'boostedTau': events.boostedTau}, axis=1, nested=False)
+      self.write(f, ak.num(ak.flatten(muons, axis=1), axis=0))
+      self.write(f, ak.num(ak.flatten(boostedTaus, axis=1), axis=0))
+    
 
       #dr cut
+      muon_boostedTau_pairs = ak.flatten(ak.cartesian({'muon': muons, 'boostedTau': boostedTaus}, axis=1, nested=False), axis=1)
       dr = muon_boostedTau_pairs['muon'].delta_r(muon_boostedTau_pairs['boostedTau'])
-      dr_mask = ak.all(dr > .1, axis=1) & ak.all(dr < .8, axis=1)
-      muon_boostedTau_pairs = muon_boostedTau_pairs[dr_mask]
+      dr_cut = (dr > .1) & (dr < 1) 
+      muon_boostedTau_pairs = muon_boostedTau_pairs[dr_cut]
 
+
+      #3rd Log
       self.write(f, "After dr cuts (muon, boosted tau): ")
-      self.write(f, ak.num(muon_boostedTau_pairs, axis=0))
-      self.write(f, ak.num(ak.flatten(muon_boostedTau_pairs['muon'], axis=1), axis=-1))
-      self.write(f, ak.num(ak.flatten(muon_boostedTau_pairs['boostedTau'], axis=1), axis=-1))
+      self.write(f, ak.num(muon_boostedTau_pairs['muon'], axis=0))
+      self.write(f, ak.num(muon_boostedTau_pairs['boostedTau'], axis=0))
 
 
-      #flatten everything out
-      muon_boostedTau_pairs = ak.flatten(muon_boostedTau_pairs, axis=-1)
-      
-      
+
       #Separate by charge signs
-      signs = muon_boostedTau_pairs['muon'].charge * muon_boostedTau_pairs['boostedTau'].charge
-      OS_pairs = muon_boostedTau_pairs[signs == -1]
-      SS_pairs = muon_boostedTau_pairs[signs == 1]
+      signs = muon_boostedTau_pairs['muon'].charge != muon_boostedTau_pairs['boostedTau'].charge
+      OS_pairs = muon_boostedTau_pairs[signs]
+      SS_pairs = muon_boostedTau_pairs[signs == False]
 
+      #4th Log
       self.write(f, "OS pairs:")
       self.write(f, ak.num(OS_pairs, axis=0))
-      self.write(f, ak.num(OS_pairs['muon'], axis=0))
-      self.write(f, ak.num(OS_pairs['boostedTau'], axis=0))
       self.write(f, "SS pairs:")
       self.write(f, ak.num(SS_pairs, axis=0))
-      self.write(f, ak.num(SS_pairs['muon'], axis=0))
-      self.write(f, ak.num(SS_pairs['boostedTau'], axis=0))
 
       #Fake rate numerator cuts
-      OS_VVLooseNum = OS_pairs['boostedTau'].rawMVAnewDM2017v2 > .5
-      SS_VVLooseNum = SS_pairs['boostedTau'].rawMVAnewDM2017v2 > .5
+      # 1, 3, 7, 15, 31, 63, 127 (VVLoose - VVTight)
+      OS_VVLooseNum = OS_pairs['boostedTau'].idMVAnewDM2017v2 >= 7
+      SS_VVLooseNum = SS_pairs['boostedTau'].idMVAnewDM2017v2 >= 7
 
       #Make combined vector
       muonVec = self.makeVector(muon_boostedTau_pairs['muon'])
@@ -135,7 +133,16 @@ class MyProcessor(processor.ProcessorABC):
       OS_flat_pt_denom = OS_pairs['boostedTau'].pt
       OS_flat_pt_num = OS_pairs['boostedTau'][OS_VVLooseNum].pt
       SS_flat_pt_denom = SS_pairs['boostedTau'].pt
-      SS_flat_pt_num = SS_pairs['boostedTau'][SS_VVLooseNum].pt
+      SS_flat_pt_num = SS_pairs['boostedTau'][SS_VVLooseNum].pt 
+      
+
+      #5th Log
+      self.write(f, "boosted pts before binning: ")
+      self.write(f, ak.num(OS_flat_pt_denom, axis=0))
+      self.write(f, ak.num(OS_flat_pt_num, axis=0))
+      self.write(f, ak.num(SS_flat_pt_denom, axis=0))
+      self.write(f, ak.num(SS_flat_pt_num, axis=0))
+
 
       #Create boostedPT histo and fill
       boosted_pt = Hist.new.Regular(10,0,500, name="pt", label ="$p_T$ (GeV)").StrCat(["opposite", "same"], name="sign", label = "Sign").StrCat(["denominator", "numerator"], name="fraction", label="Fraction").Double()
@@ -146,8 +153,17 @@ class MyProcessor(processor.ProcessorABC):
 
       #Create fake Rate histos for OS and SS
       boosted_pt_rate_os = boosted_pt[:,"opposite","numerator"] / (boosted_pt[:,"opposite","denominator"])
-      boosted_pt_rate_ss = boosted_pt[:,"same","numerator"] / (boosted_pt[:,"same","denominator"])   
+      boosted_pt_rate_ss = boosted_pt[:,"same","numerator"] / (boosted_pt[:,"same","denominator"])
 
+
+      #Final Log
+      self.write(f, "boosted pt's : (OSnum OSdenom, SSnum, SSdenom)")
+      self.write(f, (boosted_pt[:,"opposite","numerator"].counts()))
+      self.write(f, boosted_pt[:,"opposite","denominator"].counts())
+      self.write(f, boosted_pt[:,"same","numerator"].counts())
+      self.write(f, boosted_pt[:,"same","denominator"].counts())
+
+      
       return {
          dataset: {
             "pT": boosted_pt,
@@ -203,28 +219,28 @@ if __name__ == "__main__":
 
    #OS boostedTau pT fakerate
    fig, ax = plt.subplots(figsize=(10,10))
-   out[dataset]["OS_fakeRate"].plot1d()
+   hep.histplot(out[dataset]["OS_fakeRate"], ax=ax)
    ax.set_title("OS $p_T$ Fake Rate")
    ax.set_xlabel("$p_T$ (GeV)")
    fig.savefig("./plots/pT_fakeRate_OS.png")
 
    #SS bosotedTau pT fakeRate
    fig, ax = plt.subplots(figsize=(10, 10))
-   out[dataset]["SS_fakeRate"].plot1d()
+   hep.histplot(out[dataset]["SS_fakeRate"], ax=ax)
    ax.set_title("SS $p_T$ Fake Rate")
    ax.set_xlabel("$p_T$ (GeV)")
    fig.savefig("./plots/pT_fakeRate_SS.png")
 
    # Muon+BoostedTau vector pT
    fig, ax = plt.subplots(figsize=(10, 10))
-   out[dataset]["vec_pt"].plot1d()
+   hep.histplot(out[dataset]["vec_pt"], ax=ax)
    ax.set_title("Muon + Boosted Tau Vector $p_T$")
    ax.set_xlabel("$p_T$ (GeV)")
    fig.savefig("./plots/muTau_vec_pt.png")
 
    # Muon+BoostedTau vector mass
    fig, ax = plt.subplots(figsize=(10, 10))
-   out[dataset]["vec_mass"].plot1d()
+   hep.histplot(out[dataset]["vec_mass"], ax=ax)
    ax.set_title("Muon + Boosted Tau Vector Mass")
    ax.set_xlabel("Mass (GeV)")
    fig.savefig("./plots/muTau_vec_mass.png")
