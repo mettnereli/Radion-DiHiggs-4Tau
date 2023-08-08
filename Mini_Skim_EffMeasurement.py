@@ -7,7 +7,7 @@ import numpy as np
 import uproot
 import boost_histogram as bh
 import hist
-from hist import Hist
+from hist import Hist, intervals
 import matplotlib.pyplot as plt
 import mplhep as hep
 from coffea import processor, nanoevents
@@ -79,15 +79,15 @@ class MyProcessor(processor.ProcessorABC):
 		)
 
       #Create log file for writing/debugging
-      f = "./log_mini.txt"
+      #f = "./log_mini.txt"
 
-      my_file = Path(f)
-      if my_file.is_file():
-         os.remove(f)
-      self.write(f, "Inital Events: ")
-      self.write(f, ak.num(events, axis=0))
-      self.write(f, ak.sum(ak.num(muon.pt, axis=1)))
-      self.write(f, ak.sum(ak.num(tau.pt, axis=1)) )
+     # my_file = Path(f)
+      #if my_file.is_file():
+      #   os.remove(f)
+      #self.write(f, "Inital Events: ")
+      #self.write(f, ak.num(events, axis=0))
+      #self.write(f, ak.sum(ak.num(muon.pt, axis=1)))
+      #self.write(f, ak.sum(ak.num(tau.pt, axis=1)) )
 
       #mask cuts for candidates
       #muon_mask =  ((muon.pt > 28)
@@ -107,7 +107,7 @@ class MyProcessor(processor.ProcessorABC):
       #self.write(f, "After event cuts (muon and tau): ")
       #self.write(f, ak.sum(ak.num(muon.pt, axis=1)))
       #self.write(f, ak.sum(ak.num(tau.pt, axis=1)))
-      
+
       #dr cut
       muon_boostedTau_pairs = ak.cartesian({'tau': tau, 'muons': muon}, nested=False)
       dr = self.delta_r(muon_boostedTau_pairs['tau'], muon_boostedTau_pairs['muons'])
@@ -115,26 +115,27 @@ class MyProcessor(processor.ProcessorABC):
       muon_boostedTau_pairs = muon_boostedTau_pairs[dr_cut]
       
       #3rd Log
-      self.write(f, "After dr cuts (boosted tau): ")
-      self.write(f, ak.sum(ak.num(muon_boostedTau_pairs, axis=1)))
+     #self.write(f, "After dr cuts (boosted tau): ")
+     #self.write(f, ak.sum(ak.num(muon_boostedTau_pairs, axis=1)))
 
 
       #Separate based on charge
       OS_pairs = muon_boostedTau_pairs[(muon_boostedTau_pairs['tau'].charge + muon_boostedTau_pairs['muons'].charge == 0)]
       SS_pairs = muon_boostedTau_pairs[(muon_boostedTau_pairs['tau'].charge + muon_boostedTau_pairs['muons'].charge != 0)]
 
-
+     
       #4th Log
-      self.write(f, "OS pairs:")
-      self.write(f, ak.sum(ak.num(OS_pairs, axis=1)))
-      self.write(f, "SS pairs:")
-      self.write(f, ak.sum(ak.num(SS_pairs, axis=1)))
+      #self.write(f, "OS pairs:")
+      #self.write(f, ak.sum(ak.num(OS_pairs, axis=1)))
+      #self.write(f, "SS pairs:")
+      #self.write(f, ak.sum(ak.num(SS_pairs, axis=1)))
+
 
       #Get back the muons and taus after all cuts have been applied
       tau_OS, mu_OS = ak.unzip(OS_pairs)
       tau_SS, mu_SS = ak.unzip(SS_pairs)
 
-      #Boosted Tau pT Fake Rate values (OS, SS, for both num and denum)
+      #Boosted Tau pT Fake Rate values (OS, SS, for both num (loose iso cut applied) and denom (no iso cut applied))
       OS_flat_pt_denom = ak.flatten(tau_OS.pt, axis=1)
       OS_flat_pt_num = ak.flatten(tau_OS[tau_OS.iso].pt, axis=1)
       SS_flat_pt_denom = ak.flatten(tau_SS.pt, axis=1)
@@ -152,38 +153,46 @@ class MyProcessor(processor.ProcessorABC):
       QCDWeight = (luminosity * QCD500) / numEvents
 
 
-
-
       #5th Log
-      self.write(f, "boosted pts before binning: ")
-      self.write(f, ak.num(OS_flat_pt_denom, axis=0))
-      self.write(f, ak.num(OS_flat_pt_num, axis=0))
-      self.write(f, ak.num(SS_flat_pt_denom, axis=0))
-      self.write(f, ak.num(SS_flat_pt_num, axis=0))
+      #self.write(f, "boosted pts before binning: ")
+      #self.write(f, ak.num(OS_flat_pt_denom, axis=0))
+      #self.write(f, ak.num(OS_flat_pt_num, axis=0))
+      #self.write(f, ak.num(SS_flat_pt_denom, axis=0))
+      #self.write(f, ak.num(SS_flat_pt_num, axis=0))
 
-      #Create boostedPT histo and fill
+
+      # Create boostedPT histo and fill
+      #"opposite" - identified muon+boostedTau pair have opposite charges
+      #"same" -identified muon+boostedTau pair have same charges 
+      #"numerator" - boostedTau data has had a loose isolation cut applied
+      #"denominator" - boostedTau data has had no cuts applied. 
       boosted_pt = Hist.new.Regular(10,0,500, name="pt", label ="$p_T$ (GeV)").StrCat(["opposite", "same"], name="sign", label = "Sign").StrCat(["denominator", "numerator"], name="fraction", label="Fraction").Double()
       boosted_pt.fill(sign="opposite", fraction="denominator", pt = OS_flat_pt_denom, weight = DYWeight)
-      boosted_pt.fill(sign="opposite", fraction="numerator", pt = OS_flat_pt_num, weight = DYWeight)
+      boosted_pt.fill(sign="opposite", fraction="numerator", pt = OS_flat_pt_num, weight= DYWeight)
       boosted_pt.fill(sign="same", fraction="denominator", pt = SS_flat_pt_denom, weight = DYWeight)
       boosted_pt.fill(sign="same", fraction="numerator", pt = SS_flat_pt_num, weight = DYWeight)
 
-      #Create fake Rate histos for OS and SS
+      #Create Efficiency/Fake Rate histos for OS and SS
       boosted_pt_rate_os = boosted_pt[:,"opposite","numerator"] / (boosted_pt[:,"opposite","denominator"])
       boosted_pt_rate_ss = boosted_pt[:,"same","numerator"] / (boosted_pt[:,"same","denominator"])
 
+      uncertainty_os = hist.intervals.ratio_uncertainty(boosted_pt[:,"opposite","numerator"],boosted_pt[:,"opposite","denominator"])
+      uncertainty_ss = hist.intervals.ratio_uncertainty(boosted_pt[:,"same","numerator"],boosted_pt[:,"same","denominator"]) 
+
       #Final Log
-      self.write(f, "boosted pt's : (OSnum OSdenom, SSnum, SSdenom)")
-      self.write(f, (boosted_pt[:,"opposite","numerator"].counts()))
-      self.write(f, boosted_pt[:,"opposite","denominator"].counts())
-      self.write(f, boosted_pt[:,"same","numerator"].counts())
-      self.write(f, boosted_pt[:,"same","denominator"].counts())
+      #self.write(f, "boosted pt's : (OSnum OSdenom, SSnum, SSdenom)")
+      #self.write(f, (boosted_pt[:,"opposite","numerator"].counts()))
+      #self.write(f, boosted_pt[:,"opposite","denominator"].counts())
+      #self.write(f, boosted_pt[:,"same","numerator"].counts())
+      #self.write(f, boosted_pt[:,"same","denominator"].counts())
 
       return {
          dataset: {
             "pT": boosted_pt,
             "OS_fakeRate": boosted_pt_rate_os,
             "SS_fakeRate": boosted_pt_rate_ss,
+            "uncertainty_os": uncertainty_os,
+            "uncertainty_ss": uncertainty_ss,
          }
       }
    
@@ -196,7 +205,7 @@ if __name__ == "__main__":
    dataset = sys.argv[1]
 
    #read in file
-   fname = "./DYJetsToLL_Pt-400To650.root"
+   fname = "./samples/DYJetsToLL_Pt-400To650.root"
    events = NanoEventsFactory.from_root(
       fname,
       treepath="/mutau_tree",
@@ -233,15 +242,14 @@ if __name__ == "__main__":
 
    #OS boostedTau pT fakerate
    fig, ax = plt.subplots(figsize=(10,10))
-   hep.histplot(out[dataset]["OS_fakeRate"], ax=ax, yerr=False)
+   hep.histplot(out[dataset]["OS_fakeRate"], ax=ax, yerr=out[dataset]["uncertainty_os"])
    ax.set_title("OS $p_T$ Efficiency")
    ax.set_xlabel("$p_T$ (GeV)")
-   fig.savefig("./mini_plots/DY/pT_fakeRate_OS_noErr.png")
+   fig.savefig("./mini_plots/DY/pT_fakeRate_OS.png")
 
    #SS bosotedTau pT fakeRate
    fig, ax = plt.subplots(figsize=(10, 10))
-   hep.histplot(out[dataset]["SS_fakeRate"], ax=ax, yerr=False)
+   hep.histplot(out[dataset]["SS_fakeRate"], ax=ax, yerr=out[dataset]["uncertainty_ss"])
    ax.set_title("SS $p_T$ Efficiency")
    ax.set_xlabel("$p_T$ (GeV)")
-   fig.savefig("./mini_plots/DY/pT_fakeRate_SS_noErr.png")
-
+   fig.savefig("./mini_plots/DY/pT_fakeRate_SS.png")
