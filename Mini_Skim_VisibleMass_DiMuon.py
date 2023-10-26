@@ -10,9 +10,10 @@ import hist
 from hist import Hist, intervals
 import matplotlib.pyplot as plt
 import mplhep as hep
-from coffea import processor, nanoevents
+from coffea import processor, lookup_tools, nanoevents
 from coffea.nanoevents import NanoEventsFactory, NanoAODSchema, BaseSchema
 from coffea.nanoevents.methods import vector, candidate
+from coffea.lookup_tools import extractor, evaluator
 
 
 
@@ -48,6 +49,10 @@ class MyProcessor(processor.ProcessorABC):
         behavior=vector.behavior,
       )
       return newVec
+
+   def getCorrFactorMuonID(pt, eta, ID):
+      if (pt > 100): pt=100
+      return ()
 
    def weightCalc(self, name):
       WScaleFactor = 1.21
@@ -109,7 +114,9 @@ class MyProcessor(processor.ProcessorABC):
 
    def process(self,events,name, num_events):
       dataset = events.metadata['dataset']
-      events = events[events.nMu > 0]
+      events = events[events.nMu > 1]
+      events = events[events.nEle == 0]
+      events = events[ak.all(events.jetDeepCSVTags_b < .7527, axis=-1)]
       #Define muon candidate
       muon = ak.zip( 
 			{
@@ -123,30 +130,13 @@ class MyProcessor(processor.ProcessorABC):
 			with_name="MuonArray",
 			behavior=candidate.behavior,
 		) 
-      trigger_mask_Mu27 = self.bit_mask(19)
       trigger_mask_Mu50 = self.bit_mask(21)
 
-      TriggerEvents_Mu50 = events[(muon[:,0].pt > 52)]
-      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTJet, trigger_mask_Mu50) == trigger_mask_Mu50)]
-
-      TriggerEvents_Mu27 = events[(muon[:,0].pt < 52)]
-      TriggerEvents_Mu27 = TriggerEvents_Mu27[(np.bitwise_and(TriggerEvents_Mu27.HLTJet, trigger_mask_Mu27) == trigger_mask_Mu27)]
-      RelIsoMu = (TriggerEvents_Mu27.muPFChIso + TriggerEvents_Mu27.muPFNeuIso + TriggerEvents_Mu27.muPFPhoIso - (0.5 * TriggerEvents_Mu27.muPFPUIso)) / TriggerEvents_Mu27.muPt
+      TriggerEvents_Mu50 = events[(muon[:,0].pt > 55)]
+      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
 
       #Define muon candidate
-      muon27 = ak.zip( 
-			{
-				"pt": TriggerEvents_Mu27.muPt,
-				"E": TriggerEvents_Mu27.muEn,
-				"eta": TriggerEvents_Mu27.muEta,
-				"phi": TriggerEvents_Mu27.muPhi,
-				"nMuon": TriggerEvents_Mu27.nMu,
-				"charge": TriggerEvents_Mu27.muCharge,
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		)
-      muon50 = ak.zip( 
+      muon = ak.zip( 
 			{
 				"pt": TriggerEvents_Mu50.muPt,
 				"E": TriggerEvents_Mu50.muEn,
@@ -154,32 +144,37 @@ class MyProcessor(processor.ProcessorABC):
 				"phi": TriggerEvents_Mu50.muPhi,
 				"nMuon": TriggerEvents_Mu50.nMu,
 				"charge": TriggerEvents_Mu50.muCharge,
+            "ID": TriggerEvents_Mu50.muIDbit,
+            "muD0": TriggerEvents_Mu50.muD0,
+            "muDz": TriggerEvents_Mu50.muDz,
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
 		)
-      muon = ak.zip( 
-			{
-				"pt": np.concatenate((muon27.pt, muon50.pt), axis=0),
-				"E": np.concatenate((muon27.E, muon50.E), axis=0),
-				"eta": np.concatenate((muon27.eta, muon50.eta), axis=0),
-				"phi": np.concatenate((muon27.phi, muon50.phi), axis=0),
-				"nMuon": np.concatenate((muon27.nMuon, muon50.nMuon), axis=0),
-				"charge": np.concatenate((muon27.charge, muon50.charge), axis=0),
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		)
-      muon_mask =  ((muon[:,0].pt > 30)
-                     & (np.absolute(muon.eta) < 2.4))
-      
-      #Apply all masks
-      muon = muon[muon_mask]
-      print("Postcut: ", ak.num(ak.flatten(muon.pt, axis=1), axis=0))
+      IDMask = self.bit_mask(2)
       #dr cut
       dimuon = ak.combinations(muon, 2, fields=['i0', 'i1'])
-      print("Combinations: ", ak.num(dimuon, axis=0))
-      dimuon = dimuon[dimuon['i1'].pt > 10]
+      leadingMuon_mask =  ((dimuon['i0'].pt > 53)
+                     & (np.absolute(dimuon['i0'].eta) < 2.4)
+                     & (np.bitwise_and(dimuon['i0'].ID, IDMask) == IDMask)
+                     & (dimuon['i0'].muD0 < 0.045)
+                     & (dimuon['i0'].muDz < .2))
+      subleadingMuon_mask =  ((dimuon['i1'].pt > 10)
+                     & (np.absolute(dimuon['i1'].eta) < 2.4)
+                     & (np.bitwise_and(dimuon['i1'].ID, IDMask) == IDMask)
+                     & (dimuon['i1'].muD0 < 0.045)
+                     & (dimuon['i1'].muDz < .2))
+      
+      dr = self.delta_r(dimuon['i0'], dimuon['i1'])
+      dr_cut = ((dr > .1) & (dr < .8))
+      dimuon = dimuon[leadingMuon_mask & subleadingMuon_mask & dr_cut]
+
+      #Corrections
+      ext = extractor()
+      ext.add_weight_sets(["IDCorr NUM_MediumID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "TrgCorr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root"])
+      ext.finalize()
+      evaluator = ext.make_evaluator()
+
       #Separate based on charge
       OS_pairs = dimuon[(dimuon['i0'].charge + dimuon['i1'].charge == 0)]
       SS_pairs = dimuon[(dimuon['i0'].charge + dimuon['i1'].charge != 0)]
@@ -188,35 +183,66 @@ class MyProcessor(processor.ProcessorABC):
       #Get back the muons and taus after all cuts have been applied
       mu1_OS, mu2_OS = ak.unzip(OS_pairs)
       mu1_SS, mu2_SS = ak.unzip(SS_pairs)
-      print("OS pairs: ", ak.num(ak.flatten(mu1_OS.pt, axis=1), axis=0))     
+
+      #in case every item is cut out
       if ak.sum(mu1_OS.pt) == 0:
          return {
             dataset: {
             "mass": np.zeros(0),
             "mass_w": np.zeros(0),
             "ss_mass": np.zeros(0),
-            "ss_mass_w": np.zeros(0)
+            "ss_mass_w": np.zeros(0),
+            "pT": np.zeros(0),
+            "eta": np.zeros(0),
             }
          }
-      mu1Vec = self.makeVector(dimuon.i0, "muon1")
-      mu2Vec = self.makeVector(dimuon.i1, "muon2")
-      diMuVec_OS = mu1Vec.add(mu2Vec)
-      diMuVec_OS = diMuVec_OS[(diMuVec_OS.pt > 250)]
-      print("Vector: ", ak.num(ak.flatten(diMuVec_OS.mass, axis=1), axis=0))
-      XSection = self.weightCalc(name)
-      if XSection != 1:
-         luminosity = 59830.
-         weight = (XSection * luminosity) / num_events
-      else: weight = 1
 
-      shape = np.shape(ak.flatten(diMuVec_OS.mass, axis=1))
-      mass_w = np.full(shape=shape, fill_value=weight, dtype=np.double)
+      # make into vectors
+      mu1Vec = self.makeVector(OS_pairs['i0'], "muon1")
+      mu2Vec = self.makeVector(OS_pairs['i1'], "muon2")
+
+      #Weighting Time
+
+      #Find weighting factor
+      XSection = self.weightCalc(name)
+
+      #If not data, calculate all weight corrections
+      if XSection != 1:
+         LeadMuIDCorrection = evaluator["IDCorr"](mu1Vec.pt, mu1Vec.eta)
+         SubMuIDCorrection = evaluator["IDCorr"](mu2Vec.pt, mu2Vec.eta)
+         TrgCorrection = evaluator["TrgCorr"](mu1Vec.pt, mu1Vec.eta)
+         LepCorrection = LeadMuIDCorrection * SubMuIDCorrection * TrgCorrection
+         luminosity = 59830.
+         lumiWeight = (XSection * luminosity) / num_events
+      else: lumiWeight = 1
+
+      #Combine two vectors
+      diMuVec_OS = mu1Vec.add(mu2Vec)
+
+      #Get weighting array for plotting
+      shape = np.shape(ak.flatten(diMuVec_OS.pt, axis=1))
+      if lumiWeight != 1:
+         mass_weight = np.full(shape=shape, fill_value=lumiWeight, dtype=np.double)
+         mass_w = np.multiply(mass_weight, ak.flatten(LepCorrection, axis=1))
+      else:
+         mass_w = np.full(shape=shape, fill_value=1, dtype=np.double)
+
+      #Assign each weight to each value in the plot for easy access
+      mass_h = np.column_stack((ak.flatten(diMuVec_OS.mass, axis=1), mass_w))
+      pt_h = np.column_stack((ak.flatten(diMuVec_OS.pt, axis=1), mass_w))
+      eta_h = np.column_stack((ak.flatten(diMuVec_OS.eta, axis=1), mass_w))
+      mass_h, pt_h, eta_h = mass_h[pt_h[:,0] > 200], pt_h[pt_h[:,0] > 200], eta_h[pt_h[:,0] > 200]
+      mass_h, pt_h, eta_h = mass_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)], pt_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)], eta_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)]
+
       return {
          dataset: {
-            "mass": ak.flatten(diMuVec_OS.mass, axis=1),
-            "mass_w": mass_w,
+            "mass": mass_h[:,0],
+            "mass_w": mass_h[:,1],
+            "pT": pt_h[:,0],
+            "eta": eta_h[:,0],
          }
       }
+   
    
    def postprocess(self, accumulator):
       pass
@@ -247,14 +273,14 @@ if __name__ == "__main__":
       'Data.root',                              'qqH125.root']
 
    datasets = ["WJets", "DY", "Top", "SingleTop", "SMHiggs", "Diboson", "Data"]
-   DY, DY_w = [], []
-   WJets, WJets_w = [], []
-   QCD, QCD_w = [], []
-   Diboson, Diboson_w = [], []
-   SMHiggs, SMHiggs_w = [], []
-   SingleTop, SingleTop_w = [], []
-   Top, Top_w = [], []
-   Data, Data_w = [], []
+   DY, DY_w, DY_pt, DY_eta = [], [], [], []
+   WJets, WJets_w, WJets_pt, WJets_eta = [], [], [], []
+   QCD, QCD_w, QCD_pt, QCD_eta = [], [], [], []
+   Diboson, Diboson_w, Diboson_pt, Diboson_eta = [], [], [], []
+   SMHiggs, SMHiggs_w, SMHiggs_pt, SMHiggs_eta =[], [], [], []
+   SingleTop, SingleTop_w, SingleTop_pt, SingleTop_eta =[], [], [], []
+   Top, Top_w, Top_pt, Top_eta = [], [], [], []
+   Data, Data_w, Data_pt, Data_eta = [], [], [], []
 
 
    #read in file
@@ -268,41 +294,56 @@ if __name__ == "__main__":
          metadata={"dataset": dataset},
       ).events()
       string = str(sample)
-      num_events = file['hEvents'].member('fEntries')
+      num_events = file['hEvents'].member('fEntries') / 2
       out = p.process(events, fname, num_events)
       if "DY" in string:
             print("DY ", fname)
             DY = np.append(DY, out[dataset]["mass"], axis=0)
             DY_w = np.append(DY_w, out[dataset]["mass_w"], axis=0)
+            DY_pt = np.append(DY_pt, out[dataset]["pT"], axis=0)
+            DY_eta = np.append(DY_eta, out[dataset]["eta"], axis=0)
       if "WJets" in string:
             print("WJets ", fname)
             WJets = np.append(WJets, out[dataset]["mass"], axis=0)
             WJets_w = np.append(WJets_w, out[dataset]["mass_w"], axis=0)
+            WJets_pt = np.append(WJets_pt, out[dataset]["pT"], axis=0)
+            WJets_eta = np.append(WJets_eta, out[dataset]["eta"], axis=0)
       matches = ["WZ", "VV2l2nu", "ZZ4l", "ZZ2l2q"]
       if any([x in fname for x in matches]):
             print("Diboson ", fname)
             Diboson = np.append(Diboson, out[dataset]["mass"], axis=0)
             Diboson_w = np.append(Diboson_w, out[dataset]["mass_w"], axis=0)
+            Diboson_pt = np.append(Diboson_pt, out[dataset]["pT"], axis=0)
+            Diboson_eta = np.append(Diboson_eta, out[dataset]["eta"], axis=0)
       matches = ["gg", "qqH125", "toptop", "WMinus", "WPlus", "ZH125", "TauTau"] 
       if any([x in fname for x in matches]):
             print("SMHiggs ", fname)
             SMHiggs = np.append(SMHiggs, out[dataset]["mass"], axis=0)
             SMHiggs_w = np.append(SMHiggs_w, out[dataset]["mass_w"], axis=0) 
+            SMHiggs_pt = np.append(SMHiggs_pt, out[dataset]["pT"], axis=0)
+            SMHiggs_eta = np.append(SMHiggs_eta, out[dataset]["eta"], axis=0)
       matches = ["Tbar", "T-tchan", "tW"]
       if any([x in fname for x in matches]):
             print("SingleTop ", fname)
             SingleTop = np.append(SingleTop, out[dataset]["mass"], axis=0)
             SingleTop_w = np.append(SingleTop_w, out[dataset]["mass_w"], axis=0) 
+            SingleTop_pt = np.append(SingleTop_pt, out[dataset]["pT"], axis=0)
+            SingleTop_eta = np.append(SingleTop_eta, out[dataset]["eta"], axis=0)
       if "TTTo" in string:
             print("Top ", fname)
             Top = np.append(Top, out[dataset]["mass"], axis=0)
             Top_w = np.append(Top_w, out[dataset]["mass_w"], axis=0) 
+            Top_pt = np.append(Top_pt, out[dataset]["pT"], axis=0)
+            Top_eta = np.append(Top_eta, out[dataset]["eta"], axis=0)
       if "Data" in string:
             print("SingleMuon ", fname)
             Data = np.append(Data, out[dataset]["mass"], axis=0)
             Data_w = np.append(Data_w, out[dataset]["mass_w"], axis=0)
-   bins = np.linspace(0, 150, 15)
+            Data_pt = np.append(Data_pt, out[dataset]["pT"], axis=0)
+            Data_eta = np.append(Data_eta, out[dataset]["eta"], axis=0)
+   bins = np.linspace(60, 120, 60)
 
+   hep.style.use("CMS")
 
    Data_h, Data_bins = np.histogram(Data, bins=bins)
    DY_h, DY_bins = np.histogram(DY, bins=bins, weights=DY_w)
@@ -319,11 +360,66 @@ if __name__ == "__main__":
 
 
    hep.histplot(mass, label=labels, histtype=("fill"), bins=bins, stack=True)
-   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins)
+   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins, color="k")
    plt.legend(loc = 'upper right', ncols = 2, fontsize = 8)
-
-
-   #OS boostedTau pT fakerate
+   plt.yscale("log")
+   #OS boostedTau visible mass
    plt.title("DiMuon Visible Mass", fontsize= 'small')
    ax.set_xlabel("Mass (GeV)")
-   fig.savefig("./DIMUON_VISIBLE_MASS.png")
+   ax.set_ylim(bottom=0)
+   fig.savefig("./dimuon_plots/DIMUON_VISIBLE_MASS_log.png")
+   plt.clf()
+
+   outFile = uproot.recreate("dimuon_mass_60_120.root")
+   DY_h = np.histogram(DY, bins=1, weights=DY_w)
+   TT_h = np.histogram(Top, bins=1, weights=Top_w)
+   VV_h = np.histogram(np.append(Diboson, SingleTop), bins=1, weights=np.append(Diboson_w, SingleTop_w))
+   outFile["DY"] = DY_h
+   outFile["TT"] = TT_h
+   outFile["VV"] = VV_h
+
+
+
+
+
+   bins = np.linspace(200, 1000, 80)
+   Data_h, Data_bins = np.histogram(Data_pt, bins=bins)
+   DY_h, DY_bins = np.histogram(DY_pt, bins=bins, weights=DY_w)
+   WJets_h, WJets_bins = np.histogram(WJets_pt, bins=bins, weights=WJets_w) 
+   Top_h, Top_bins = np.histogram(Top_pt, bins=bins, weights= Top_w) 
+   SingleTop_h, SingleTop_bins = np.histogram(SingleTop_pt, bins=bins, weights=SingleTop_w) 
+   Diboson_h, Diboson_bins = np.histogram(Diboson_pt, bins=bins, weights=Diboson_w)
+   SMHiggs_h, SMHiggs_bins = np.histogram(SMHiggs_pt, bins=bins, weights=SMHiggs_w)   
+
+   pT =   [SMHiggs_h,   Diboson_h,   SingleTop_h,   DY_h,   Top_h,   WJets_h]
+   hep.histplot(pT, label=labels, histtype=("fill"), bins=bins, stack=True)
+   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins, color='k')
+   plt.yscale("log")
+   plt.legend(loc = 'upper right', ncols = 2, fontsize = 8)
+   ax.set_ylim(bottom=0)
+   #OS boostedTau pT fakerate
+   plt.title("DiMuon pT", fontsize= 'small')
+   ax.set_xlabel("pT (GeV)")
+   fig.savefig("./dimuon_plots/DIMUON_pT_log.png")
+
+   plt.clf()
+   bins = np.linspace(-3, 3, 20)
+   Data_h, Data_bins = np.histogram(Data_eta, bins=bins)
+   DY_h, DY_bins = np.histogram(DY_eta, bins=bins, weights=DY_w)
+   WJets_h, WJets_bins = np.histogram(WJets_eta, bins=bins, weights=WJets_w) 
+   Top_h, Top_bins = np.histogram(Top_eta, bins=bins, weights= Top_w) 
+   SingleTop_h, SingleTop_bins = np.histogram(SingleTop_eta, bins=bins, weights=SingleTop_w) 
+   Diboson_h, Diboson_bins = np.histogram(Diboson_eta, bins=bins, weights=Diboson_w)
+   SMHiggs_h, SMHiggs_bins = np.histogram(SMHiggs_eta, bins=bins, weights=SMHiggs_w)   
+
+   eta =   [SMHiggs_h,   Diboson_h,   SingleTop_h,   DY_h,   Top_h,   WJets_h]
+   hep.histplot(eta, label=labels, histtype=("fill"), bins=bins, stack=True)
+   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins, color='k')
+   plt.legend(loc = 'upper right', ncols = 2, fontsize = 8)
+   ax.set_ylim(bottom=0)
+   #eta
+   plt.yscale("log")
+   plt.title("DiMuon eta", fontsize= 'small')
+   ax.set_xlabel("Radians")
+   fig.savefig("./dimuon_plots/DIMUON_eta_log.png")
+

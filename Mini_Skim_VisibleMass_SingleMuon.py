@@ -10,9 +10,10 @@ import hist
 from hist import Hist, intervals
 import matplotlib.pyplot as plt
 import mplhep as hep
-from coffea import processor, nanoevents
+from coffea import processor, nanoevents, lookup_tools
 from coffea.nanoevents import NanoEventsFactory, NanoAODSchema, BaseSchema
 from coffea.nanoevents.methods import vector, candidate
+from coffea.lookup_tools import extractor, evaluator
 
 
 
@@ -110,10 +111,11 @@ class MyProcessor(processor.ProcessorABC):
       else: print("Something's Wrong!")
       return
 
-   def process(self,events,name, num_events):
+   def process(self, events,name, num_events):
       dataset = events.metadata['dataset']
-      events = events[ak.all(events.jetDeepCSVTags_b < .7527, axis=-1)]
       events = events[events.nMu > 0]
+      events = events[events.nEle == 0]
+      events = events[ak.all(events.jetDeepCSVTags_b < .7527, axis=-1)]
       #Define muon candidate
       muon = ak.zip( 
 			{
@@ -128,16 +130,22 @@ class MyProcessor(processor.ProcessorABC):
 			behavior=candidate.behavior,
 		) 
       trigger_mask_Mu27 = self.bit_mask(19)
-      trigger_mask_Mu50 = self.bit_mask(21)
+      trigger_mask_Mu50 = self.bit_mask(21) 
 
       TriggerEvents_Mu50 = events[(muon[:,0].pt > 55)]
-      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTJet, trigger_mask_Mu50) == trigger_mask_Mu50)]
+      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
+      TriggerEvents_Mu27 = events[(muon[:,0].pt < 55) & (np.sqrt(events.met_px**2 + events.met_py**2) > 30)]
+      TriggerEvents_Mu27 = TriggerEvents_Mu27[(np.bitwise_and(TriggerEvents_Mu27.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
 
-      TriggerEvents_Mu27 = events[(muon[:,0].pt < 55)]
-      TriggerEvents_Mu27 = TriggerEvents_Mu27[(np.bitwise_and(TriggerEvents_Mu27.HLTJet, trigger_mask_Mu27) == trigger_mask_Mu27)]
-      RelIsoMu = (TriggerEvents_Mu27.muPFChIso + TriggerEvents_Mu27.muPFNeuIso + TriggerEvents_Mu27.muPFPhoIso - (0.5 * TriggerEvents_Mu27.muPFPUIso)) / TriggerEvents_Mu27.muPt
+    \
+      #RelIsoMu = (TriggerEvents_Mu27.muPFChIso + TriggerEvents_Mu27.muPFNeuIso + TriggerEvents_Mu27.muPFPhoIso - (0.5 * TriggerEvents_Mu27.muPFPUIso)) / TriggerEvents_Mu27.muPt
 
-      #Define muon candidate
+      ext = extractor()
+      ext.add_weight_sets(["IDCorr NUM_MediumID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "Trg50Corr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "Trg27Corr IsoMu24_OR_IsoTkMu24_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "IsoCorr NUM_LooseRelIso_DEN_MediumID_pt_abseta ./RunBCDEF_SF_ISO.root"])
+      ext.finalize()
+      evaluator = ext.make_evaluator()
+
+      #Define muon candidates
       muon27 = ak.zip( 
 			{
 				"pt": TriggerEvents_Mu27.muPt,
@@ -146,6 +154,8 @@ class MyProcessor(processor.ProcessorABC):
 				"phi": TriggerEvents_Mu27.muPhi,
 				"nMuon": TriggerEvents_Mu27.nMu,
 				"charge": TriggerEvents_Mu27.muCharge,
+            "D0": TriggerEvents_Mu27.muD0,
+            "Dz": TriggerEvents_Mu27.muDz,
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
@@ -158,10 +168,22 @@ class MyProcessor(processor.ProcessorABC):
 				"phi": TriggerEvents_Mu50.muPhi,
 				"nMuon": TriggerEvents_Mu50.nMu,
 				"charge": TriggerEvents_Mu50.muCharge,
+            "D0": TriggerEvents_Mu50.muD0,
+            "Dz": TriggerEvents_Mu50.muDz,
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
 		)
+
+      Mu50IsoCorr = evaluator["IsoCorr"](muon50.pt, muon50.eta)   
+      Mu50TrgCorr = evaluator["Trg50Corr"](muon50.pt, muon50.eta)
+      Mu50IDCorr = evaluator["IDCorr"](muon50.pt, muon50.eta)
+      Mu27IsoCorr = evaluator["IsoCorr"](muon27.pt, muon27.eta)
+      Mu27TrgCorr = evaluator["Trg27Corr"](muon27.pt, muon27.eta)
+      Mu27IDCorr = evaluator["IDCorr"](muon27.pt, muon27.eta)
+      Lep50Corr = Mu50IsoCorr * Mu50TrgCorr * Mu50IDCorr
+      Lep27Corr = Mu27IsoCorr * Mu27TrgCorr * Mu27IDCorr
+      #LepCorr = np.append(Lep27Corr, Lep50Corr, axis=0)
       muon = ak.zip( 
 			{
 				"pt": np.concatenate((muon27.pt, muon50.pt), axis=0),
@@ -170,12 +192,13 @@ class MyProcessor(processor.ProcessorABC):
 				"phi": np.concatenate((muon27.phi, muon50.phi), axis=0),
 				"nMuon": np.concatenate((muon27.nMuon, muon50.nMuon), axis=0),
 				"charge": np.concatenate((muon27.charge, muon50.charge), axis=0),
+            "D0": np.concatenate((muon27.D0, muon50.D0), axis=0),
+            "Dz": np.concatenate((muon27.Dz, muon50.Dz), axis=0),
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
 		)
-      muon_mask =  ((muon[:,0].pt > 30)
-                     & (np.absolute(muon.eta) < 2.4))
+
       tau = ak.zip( 
 			{
 				"pt": np.concatenate((TriggerEvents_Mu27.boostedTauPt, TriggerEvents_Mu50.boostedTauPt), axis=0),
@@ -194,24 +217,23 @@ class MyProcessor(processor.ProcessorABC):
 			with_name="TauArray",
 			behavior=candidate.behavior,
 		)
-      boostedTau_mask = ((tau.pt > 20)
-                        & (np.absolute(tau.eta) <= 2.5)
-                         & (tau.antiMu == True)
-                         & (tau.iso == True))
-      
-      #Apply all masks
-      tau = tau[boostedTau_mask]
-      muon = muon[muon_mask]
 
       #dr cut
-      muon_boostedTau_pairs = ak.cartesian({'tau': tau, 'muons': muon}, nested=False)
-      dr = self.delta_r(muon_boostedTau_pairs['tau'], muon_boostedTau_pairs['muons'])
-      dr_cut = (dr > .1) & (dr < 1)
-      muon_boostedTau_pairs = muon_boostedTau_pairs[dr_cut]
+      pairs = ak.cartesian({'tau': tau, 'muon': muon}, nested=False)
+      dr = self.delta_r(pairs['tau'], pairs['muon'])
+      muon_mask = ((pairs['muon'].eta < 2.4)
+                  & (pairs['muon'].D0 < 0.045)
+                  & (pairs['muon'].Dz < 0.2))
+      boostedTau_mask = ((pairs['tau'].pt > 20)
+                        & (np.absolute(pairs['tau'].eta) <= 2.5)
+                         & (pairs['tau'].antiMu == True)
+                         & (pairs['tau'].iso == True)) 
+      dr_cut = ((dr > .1) & (dr < .8))
+      pairs = pairs[boostedTau_mask & dr_cut]
 
       #Separate based on charge
-      OS_pairs = muon_boostedTau_pairs[(muon_boostedTau_pairs['tau'].charge * muon_boostedTau_pairs['muons'].charge < 0)]
-      SS_pairs = muon_boostedTau_pairs[(muon_boostedTau_pairs['tau'].charge * muon_boostedTau_pairs['muons'].charge > 0)]
+      OS_pairs = pairs[(pairs['tau'].charge * pairs['muon'].charge < 0)]
+      SS_pairs = pairs[(pairs['tau'].charge * pairs['muon'].charge > 0)]
 
       #Get back the muons and taus after all cuts have been applied
       tau_OS, mu_OS = ak.unzip(OS_pairs)
@@ -225,6 +247,7 @@ class MyProcessor(processor.ProcessorABC):
             "ss_mass_w": np.zeros(0)
             }
          }
+
       muVec = self.makeVector(mu_OS, "muon")
       tauVec = self.makeVector(tau_OS, "tau")
       ZVec_OS = tauVec.add(muVec)
@@ -298,7 +321,7 @@ if __name__ == "__main__":
    Data, Data_w = [], []
    Data_SS, DY_SS, Top_SS, WJets_SS = [], [], [], []
    DY_SS_w, Top_SS_w, WJets_SS_w = [], [], []
-   bins=np.linspace(0, 150, 15)
+   bins=np.linspace(0, 150, 30)
 
    #read in file
    for sample in fileList:
@@ -378,10 +401,18 @@ if __name__ == "__main__":
    mass_w = [SMHiggs_w, Diboson_w, SingleTop_w, DY_w, Top_w, WJets_w, QCD_w]
    labels = ["SMHiggs", "Diboson", "SingleTop", "DY", "Top", "WJets", "QCD"]
    hep.histplot(mass, label=labels, histtype=("fill"), bins=bins, stack=True)
-   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins)
+   hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins, color='k')
    plt.legend(loc = 'upper right', ncols = 2, fontsize = 8)
 
    #OS boostedTau pT fakerate
    plt.title("Boosted Tau + Muon Visible Mass", fontsize= 'small')
    ax.set_xlabel("Mass (GeV)")
-   fig.savefig("./SingleMuon_VISIBLE_MASS.png")
+   fig.savefig("./singlemuon_plots/SingleMuon_VISIBLE_MASS.png")
+
+   outFile = uproot.recreate("SingleMuon_mass.root")
+   DY_h = np.histogram(DY, bins=bins, weights=DY_w)
+   TT_h = np.histogram(Top, bins=bins, weights=Top_w)
+   VV_h = np.histogram(np.append(Diboson, SingleTop), bins=bins, weights=np.append(Diboson_w, SingleTop_w))
+   outFile["DY"] = DY_h
+   outFile["TT"] = TT_h
+   outFile["VV"] = VV_h
