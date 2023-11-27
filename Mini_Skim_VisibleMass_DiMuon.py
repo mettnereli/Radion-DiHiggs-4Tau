@@ -30,12 +30,15 @@ class MyProcessor(processor.ProcessorABC):
    
    def delta_r(self, candidate1, candidate2):
       return np.sqrt((candidate2.eta - candidate1.eta)**2 + (candidate2.phi - candidate1.phi)**2)
+
    def mass(self, part1, part2):
       return np.sqrt((part1.E + part2.E)**2 - (part1.Px + part2.Px)**2 - (part1.Py + part2.Py)**2 - (part1.Pz + part2.Pz)**2)
+
    def bit_mask(self, bit):
       mask = 0
       mask += (1 << bit)
       return mask
+
    def makeVector(self, particle, name):
       mass = 0.10565837
       newVec = ak.zip(
@@ -49,10 +52,6 @@ class MyProcessor(processor.ProcessorABC):
         behavior=vector.behavior,
       )
       return newVec
-
-   def getCorrFactorMuonID(pt, eta, ID):
-      if (pt > 100): pt=100
-      return ()
 
    def weightCalc(self, name):
       WScaleFactor = 1.21
@@ -114,64 +113,64 @@ class MyProcessor(processor.ProcessorABC):
 
    def process(self,events,name, num_events):
       dataset = events.metadata['dataset']
-      events = events[events.nMu > 1]
-      events = events[events.nEle == 0]
+      
+      #At least two muons
+      events = events[ak.num(events.muPt) > 1]
+      # bjet veto
       events = events[ak.all(events.jetDeepCSVTags_b < .7527, axis=-1)]
+      # Extra electron veto 
+      eleEvents = events[ak.num(events.elePt) > 0]
+      RelIsoEle = (eleEvents.elePFChIso + eleEvents.elePFNeuIso + eleEvents.elePFPhoIso - (0.5 * eleEvents.elePFPUIso)) / eleEvents.elePt
+      eleCut = ak.all((np.abs(RelIsoEle) < 0.8) & (eleEvents.elePt[:,0] > 10) & (np.bitwise_and(eleEvents.eleIDbit, self.bit_mask(2)) == self.bit_mask(2)), axis=-1)
+      events = events[eleCut == False]
+      #Extra muon veto
+      extraMuEvents = events[ak.num(events.muPt) > 2]
+      RelIsoMu = (extraMuEvents.muPFChIso + extraMuEvents.muPFNeuIso + extraMuEvents.muPFPhoIso - (0.5 * extraMuEvents.muPFPUIso)) / extraMuEvents.muPt
+      muCut = ak.all((np.abs(RelIsoMu) < 0.8) & (extraMuEvents.muPt[:,2] > 10) & (np.bitwise_and(extraMuEvents.muIDbit, self.bit_mask(2)) == self.bit_mask(2)), axis=-1)
+      events = events[muCut == False]
+      #Apply triggermask
+      trigger_mask_Mu50 = self.bit_mask(21)
+      Mu50 = events[(events.muPt[:,0] > 55)]
+      Mu50 = Mu50[(np.bitwise_and(Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
+
       #Define muon candidate
       muon = ak.zip( 
 			{
-				"pt": events.muPt,
-				"E": events.muEn,
-				"eta": events.muEta,
-				"phi": events.muPhi,
-				"nMuon": events.nMu,
-				"charge": events.muCharge,
+				"pt": Mu50.muPt,
+				"energy": Mu50.muEn,
+				"eta": Mu50.muEta,
+				"phi": Mu50.muPhi,
+				"nMuon": Mu50.nMu,
+				"charge": Mu50.muCharge,
+            "ID": Mu50.muIDbit,
+            "muD0": Mu50.muD0,
+            "muDz": Mu50.muDz,
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
 		) 
-      trigger_mask_Mu50 = self.bit_mask(21)
-
-      TriggerEvents_Mu50 = events[(muon[:,0].pt > 55)]
-      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
-
-      #Define muon candidate
-      muon = ak.zip( 
-			{
-				"pt": TriggerEvents_Mu50.muPt,
-				"E": TriggerEvents_Mu50.muEn,
-				"eta": TriggerEvents_Mu50.muEta,
-				"phi": TriggerEvents_Mu50.muPhi,
-				"nMuon": TriggerEvents_Mu50.nMu,
-				"charge": TriggerEvents_Mu50.muCharge,
-            "ID": TriggerEvents_Mu50.muIDbit,
-            "muD0": TriggerEvents_Mu50.muD0,
-            "muDz": TriggerEvents_Mu50.muDz,
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		)
-      IDMask = self.bit_mask(2)
-      #dr cut
       dimuon = ak.combinations(muon, 2, fields=['i0', 'i1'])
-      leadingMuon_mask =  ((dimuon['i0'].pt > 53)
+      IDMask = self.bit_mask(2)
+      dr = self.delta_r(dimuon['i0'], dimuon['i1'])
+      #cuts
+      dimuon_mask =  ak.all((dimuon['i0'].pt > 55)
                      & (np.absolute(dimuon['i0'].eta) < 2.4)
                      & (np.bitwise_and(dimuon['i0'].ID, IDMask) == IDMask)
                      & (dimuon['i0'].muD0 < 0.045)
-                     & (dimuon['i0'].muDz < .2))
-      subleadingMuon_mask =  ((dimuon['i1'].pt > 10)
+                     & (dimuon['i0'].muDz < .2)
+                     & (dimuon['i1'].pt > 10)
                      & (np.absolute(dimuon['i1'].eta) < 2.4)
                      & (np.bitwise_and(dimuon['i1'].ID, IDMask) == IDMask)
                      & (dimuon['i1'].muD0 < 0.045)
-                     & (dimuon['i1'].muDz < .2))
+                     & (dimuon['i1'].muDz < .2)
+                     & (dr > .1)
+                     & (dr < .8), axis=-1)
       
-      dr = self.delta_r(dimuon['i0'], dimuon['i1'])
-      dr_cut = ((dr > .1) & (dr < .8))
-      dimuon = dimuon[leadingMuon_mask & subleadingMuon_mask & dr_cut]
+      dimuon = dimuon[dimuon_mask]
 
       #Corrections
       ext = extractor()
-      ext.add_weight_sets(["IDCorr NUM_MediumID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "TrgCorr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root"])
+      ext.add_weight_sets(["IDCorr NUM_LooseID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "TrgCorr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "pTCorr Ratio2D ./zmm_2d_2018.root"])
       ext.finalize()
       evaluator = ext.make_evaluator()
 
@@ -185,7 +184,7 @@ class MyProcessor(processor.ProcessorABC):
       mu1_SS, mu2_SS = ak.unzip(SS_pairs)
 
       #in case every item is cut out
-      if ak.sum(mu1_OS.pt) == 0:
+      if (ak.sum(mu1_OS.pt) == 0) or (ak.sum(mu1_SS.pt) == 0):
          return {
             dataset: {
             "mass": np.zeros(0),
@@ -201,38 +200,64 @@ class MyProcessor(processor.ProcessorABC):
       mu1Vec = self.makeVector(OS_pairs['i0'], "muon1")
       mu2Vec = self.makeVector(OS_pairs['i1'], "muon2")
 
-      #Weighting Time
+      mu1Vec_SS = self.makeVector(SS_pairs['i0'], "muon1")
+      mu2Vec_SS = self.makeVector(SS_pairs['i1'], "muon2")
 
       #Find weighting factor
       XSection = self.weightCalc(name)
 
+      #Combine two vectors
+      diMuVec_OS = mu1Vec.add(mu2Vec)
+      diMuVec_SS = mu1Vec_SS.add(mu2Vec_SS)
+
+      #Get weighting array for plotting
+      shape = np.shape(ak.flatten(diMuVec_OS.pt, axis=1))
+      SS_shape = np.shape(ak.flatten(diMuVec_SS.pt, axis=1))
+
+
       #If not data, calculate all weight corrections
       if XSection != 1:
+         luminosity = 59830.
+         lumiWeight = (XSection * luminosity) / num_events
+
+         #OS
          LeadMuIDCorrection = evaluator["IDCorr"](mu1Vec.pt, mu1Vec.eta)
          SubMuIDCorrection = evaluator["IDCorr"](mu2Vec.pt, mu2Vec.eta)
          TrgCorrection = evaluator["TrgCorr"](mu1Vec.pt, mu1Vec.eta)
          LepCorrection = LeadMuIDCorrection * SubMuIDCorrection * TrgCorrection
-         luminosity = 59830.
-         lumiWeight = (XSection * luminosity) / num_events
-      else: lumiWeight = 1
+         if ("DYJets" in name) or ("WJets" in name):
+            pTCorrection = evaluator["pTCorr"](diMuVec_OS.mass, diMuVec_OS.pt)
+            LepCorrection = LeadMuIDCorrection * SubMuIDCorrection * TrgCorrection * pTCorrection
+         #SS
+         SS_LeadMuIDCorrection = evaluator["IDCorr"](mu1Vec_SS.pt, mu1Vec_SS.eta)
+         SS_SubMuIDCorrection = evaluator["IDCorr"](mu2Vec_SS.pt, mu2Vec_SS.eta)
+         SS_TrgCorrection = evaluator["TrgCorr"](mu1Vec_SS.pt, mu1Vec_SS.eta)
+         SS_LepCorrection = SS_LeadMuIDCorrection * SS_SubMuIDCorrection * SS_TrgCorrection
 
-      #Combine two vectors
-      diMuVec_OS = mu1Vec.add(mu2Vec)
-
-      #Get weighting array for plotting
-      shape = np.shape(ak.flatten(diMuVec_OS.pt, axis=1))
-      if lumiWeight != 1:
-         mass_weight = np.full(shape=shape, fill_value=lumiWeight, dtype=np.double)
-         mass_w = np.multiply(mass_weight, ak.flatten(LepCorrection, axis=1))
+         mass_w = np.full(shape=shape, fill_value=lumiWeight, dtype=np.double)
+         mass_w = np.multiply(mass_w, ak.flatten(LepCorrection, axis=-1))
+         SS_mass_w = np.full(shape=SS_shape, fill_value=lumiWeight, dtype=np.double) 
+         SS_mass_w = np.multiply(SS_mass_w, ak.flatten(SS_LepCorrection, axis=-1))
       else:
          mass_w = np.full(shape=shape, fill_value=1, dtype=np.double)
+         SS_mass_w = np.full(shape=SS_shape, fill_value=1, dtype=np.double) 
+
 
       #Assign each weight to each value in the plot for easy access
       mass_h = np.column_stack((ak.flatten(diMuVec_OS.mass, axis=1), mass_w))
+      SS_mass_h = np.column_stack((ak.flatten(diMuVec_SS.mass, axis=1), SS_mass_w))
+
       pt_h = np.column_stack((ak.flatten(diMuVec_OS.pt, axis=1), mass_w))
+      SS_pt_h = np.column_stack((ak.flatten(diMuVec_SS.pt, axis=1), SS_mass_w))
+
       eta_h = np.column_stack((ak.flatten(diMuVec_OS.eta, axis=1), mass_w))
+      
+      #200 GeV pT cut, 60-120 mass cut
       mass_h, pt_h, eta_h = mass_h[pt_h[:,0] > 200], pt_h[pt_h[:,0] > 200], eta_h[pt_h[:,0] > 200]
       mass_h, pt_h, eta_h = mass_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)], pt_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)], eta_h[(mass_h[:,0] > 60) & (mass_h[:,0] < 120)]
+
+      SS_mass_h = SS_mass_h[SS_pt_h[:,0] > 200]
+      SS_mass_h = SS_mass_h[(SS_mass_h[:,0] > 60) & (SS_mass_h[:,0] < 120)]
 
       return {
          dataset: {
@@ -240,6 +265,8 @@ class MyProcessor(processor.ProcessorABC):
             "mass_w": mass_h[:,1],
             "pT": pt_h[:,0],
             "eta": eta_h[:,0],
+            "ss_mass": SS_mass_h[:,0],
+            "ss_mass_w": SS_mass_h[:,1],
          }
       }
    
@@ -281,7 +308,8 @@ if __name__ == "__main__":
    SingleTop, SingleTop_w, SingleTop_pt, SingleTop_eta =[], [], [], []
    Top, Top_w, Top_pt, Top_eta = [], [], [], []
    Data, Data_w, Data_pt, Data_eta = [], [], [], []
-
+   Data_SS, DY_SS, Top_SS, WJets_SS = [], [], [], []
+   DY_SS_w, Top_SS_w, WJets_SS_w = [], [], []
 
    #read in file
    for sample in fileList:
@@ -302,12 +330,16 @@ if __name__ == "__main__":
             DY_w = np.append(DY_w, out[dataset]["mass_w"], axis=0)
             DY_pt = np.append(DY_pt, out[dataset]["pT"], axis=0)
             DY_eta = np.append(DY_eta, out[dataset]["eta"], axis=0)
+            DY_SS = np.append(DY_SS, out[dataset]["ss_mass"], axis=0)
+            DY_SS_w = np.append(DY_SS_w, out[dataset]["ss_mass_w"], axis=0)
       if "WJets" in string:
             print("WJets ", fname)
             WJets = np.append(WJets, out[dataset]["mass"], axis=0)
             WJets_w = np.append(WJets_w, out[dataset]["mass_w"], axis=0)
             WJets_pt = np.append(WJets_pt, out[dataset]["pT"], axis=0)
             WJets_eta = np.append(WJets_eta, out[dataset]["eta"], axis=0)
+            WJets_SS = np.append(WJets_SS, out[dataset]["ss_mass"], axis=0)
+            WJets_SS_w = np.append(WJets_SS_w, out[dataset]["ss_mass_w"], axis=0)
       matches = ["WZ", "VV2l2nu", "ZZ4l", "ZZ2l2q"]
       if any([x in fname for x in matches]):
             print("Diboson ", fname)
@@ -335,17 +367,34 @@ if __name__ == "__main__":
             Top_w = np.append(Top_w, out[dataset]["mass_w"], axis=0) 
             Top_pt = np.append(Top_pt, out[dataset]["pT"], axis=0)
             Top_eta = np.append(Top_eta, out[dataset]["eta"], axis=0)
+            Top_SS = np.append(Top_SS, out[dataset]["ss_mass"], axis=0)
+            Top_SS_w = np.append(Top_SS_w, out[dataset]["ss_mass_w"], axis=0)
       if "Data" in string:
             print("SingleMuon ", fname)
             Data = np.append(Data, out[dataset]["mass"], axis=0)
             Data_w = np.append(Data_w, out[dataset]["mass_w"], axis=0)
             Data_pt = np.append(Data_pt, out[dataset]["pT"], axis=0)
             Data_eta = np.append(Data_eta, out[dataset]["eta"], axis=0)
+            Data_SS = np.append(Data_SS, out[dataset]["ss_mass"], axis=0)
    bins = np.linspace(60, 120, 60)
 
    hep.style.use("CMS")
 
+   NonQCD = np.append(np.append(DY_SS, WJets_SS, axis=0), Top_SS, axis=0)
+   NonQCD_w = np.append(np.append(DY_SS_w, WJets_SS_w, axis=0), Top_SS_w, axis=0) 
+
+   QCDScaleFactor = 1.6996559936491136
    Data_h, Data_bins = np.histogram(Data, bins=bins)
+   Data_SS_h, Data_SS_bins = np.histogram(Data_SS, bins=bins)
+   NonQCD_h, NonQCD_bins = np.histogram(NonQCD, bins=bins)
+   QCD_h = np.subtract(Data_SS_h, NonQCD_h, dtype=object, out=None)
+   for i in range(QCD_h.size):
+      if QCD_h[i] < 0.0:
+         QCD_h[i] = 0.0
+   QCD_h = QCD_h * QCDScaleFactor
+   QCD_w = np.full(shape=QCD_h.shape, fill_value=1, dtype=np.double)
+
+
    DY_h, DY_bins = np.histogram(DY, bins=bins, weights=DY_w)
    WJets_h, WJets_bins = np.histogram(WJets, bins=bins, weights=WJets_w) 
    Top_h, Top_bins = np.histogram(Top, bins=bins, weights= Top_w) 
@@ -354,30 +403,36 @@ if __name__ == "__main__":
    SMHiggs_h, SMHiggs_bins = np.histogram(SMHiggs, bins=bins, weights=SMHiggs_w)   
 
 
-   mass =   [SMHiggs_h,   Diboson_h,   SingleTop_h,   DY_h,   Top_h,   WJets_h]
-   mass_w = [SMHiggs_w, Diboson_w, SingleTop_w, DY_w, Top_w, WJets_w]
-   labels = ["SMHiggs", "Diboson", "SingleTop", "DY", "Top", "WJets"]
+   mass =   [SMHiggs_h,   Diboson_h,   SingleTop_h,   DY_h,   Top_h,   WJets_h, QCD_h]
+   mass_w = [SMHiggs_w, Diboson_w, SingleTop_w, DY_w, Top_w, WJets_w, QCD_w]
+   labels = ["SMHiggs", "Diboson", "SingleTop", "DY", "Top", "WJets", "QCD"]
 
 
    hep.histplot(mass, label=labels, histtype=("fill"), bins=bins, stack=True)
    hep.histplot(Data_h, label="Data", histtype=("errorbar"), bins=bins, color="k")
    plt.legend(loc = 'upper right', ncols = 2, fontsize = 8)
-   plt.yscale("log")
+   #plt.yscale("log")
    #OS boostedTau visible mass
    plt.title("DiMuon Visible Mass", fontsize= 'small')
    ax.set_xlabel("Mass (GeV)")
    ax.set_ylim(bottom=0)
-   fig.savefig("./dimuon_plots/DIMUON_VISIBLE_MASS_log.png")
+   fig.savefig("./dimuon_plots/DIMUON_VISIBLE_MASS.png")
    plt.clf()
 
-   outFile = uproot.recreate("dimuon_mass_60_120.root")
-   DY_h = np.histogram(DY, bins=1, weights=DY_w)
+   outFile = uproot.recreate("boostedHTT_mm_2018.input.root")
+   DY_hist, DY_bins = np.histogram(DY, bins=1, weights=DY_w)
+   DY_h = (DY_hist, DY_bins)
+   QCD_hist = (QCD_h, DY_bins)
    TT_h = np.histogram(Top, bins=1, weights=Top_w)
    VV_h = np.histogram(np.append(Diboson, SingleTop), bins=1, weights=np.append(Diboson_w, SingleTop_w))
-   outFile["DY"] = DY_h
-   outFile["TT"] = TT_h
-   outFile["VV"] = VV_h
-
+   WJets_h = np.histogram(WJets, bins=1, weights=WJets_w)
+   Data_h = np.histogram(Data, bins=1)
+   outFile["DY_Jets_mm_1_13TeV/DYJets125"] = DY_h
+   outFile["DY_Jets_mm_1_13TeV/TT"] = TT_h
+   outFile["DY_Jets_mm_1_13TeV/VV"] = VV_h
+   outFile["DY_Jets_mm_1_13TeV/W"] = WJets_h
+   outFile["DY_Jets_mm_1_13TeV/QCD"] = QCD_hist
+   outFile["DY_Jets_mm_1_13TeV/data_obs"] = Data_h
 
 
 

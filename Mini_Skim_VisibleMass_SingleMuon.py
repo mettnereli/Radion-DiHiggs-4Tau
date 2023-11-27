@@ -113,87 +113,41 @@ class MyProcessor(processor.ProcessorABC):
 
    def process(self, events,name, num_events):
       dataset = events.metadata['dataset']
-      events = events[events.nMu > 0]
-      events = events[events.nEle == 0]
+      #At least on muon
+      events = events[ak.num(events.muPt) > 0]
+      #Bjet veto
       events = events[ak.all(events.jetDeepCSVTags_b < .7527, axis=-1)]
-      #Define muon candidate
-      muon = ak.zip( 
-			{
-				"pt": events.muPt,
-				"E": events.muEn,
-				"eta": events.muEta,
-				"phi": events.muPhi,
-				"nMuon": events.nMu,
-				"charge": events.muCharge,
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		) 
+      #Extra electron veto
+      eleEvents = events[ak.num(events.elePt) > 0]
+      RelIsoEle = (eleEvents.elePFChIso + eleEvents.elePFNeuIso + eleEvents.elePFPhoIso - (0.5 * eleEvents.elePFPUIso)) / eleEvents.elePt
+      eleCut = ak.all((np.abs(RelIsoEle) < 0.8) & (eleEvents.elePt[:,0] > 10) & (np.bitwise_and(eleEvents.eleIDbit, self.bit_mask(2)) == self.bit_mask(2)), axis=-1)
+      events = events[eleCut == False]
+      #Extra muon veto
+      extraMuEvents = events[ak.num(events.muPt) > 1]
+      RelIsoMu = (extraMuEvents.muPFChIso + extraMuEvents.muPFNeuIso + extraMuEvents.muPFPhoIso - (0.5 * extraMuEvents.muPFPUIso)) / extraMuEvents.muPt
+      muCut = ak.all((np.abs(RelIsoMu) < 0.8) & (extraMuEvents.muPt[:,1] > 10) & (np.bitwise_and(extraMuEvents.muIDbit, self.bit_mask(2)) == self.bit_mask(2)), axis=-1)
+      events = events[muCut == False]
+
+      #Trigger cut
       trigger_mask_Mu27 = self.bit_mask(19)
       trigger_mask_Mu50 = self.bit_mask(21) 
 
-      TriggerEvents_Mu50 = events[(muon[:,0].pt > 55)]
-      TriggerEvents_Mu50 = TriggerEvents_Mu50[(np.bitwise_and(TriggerEvents_Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
-      TriggerEvents_Mu27 = events[(muon[:,0].pt < 55) & (np.sqrt(events.met_px**2 + events.met_py**2) > 30)]
-      TriggerEvents_Mu27 = TriggerEvents_Mu27[(np.bitwise_and(TriggerEvents_Mu27.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
+      Mu50 = events[(events.muPt[:,0] > 55)]
+      Mu50 = Mu50[(np.bitwise_and(Mu50.HLTEleMuX, trigger_mask_Mu50) == trigger_mask_Mu50)]
+      Mu27 = events[(events.muPt[:,0] < 55) & (events.muPt[:,0] > 30)]
+      Mu27 = Mu27[(np.bitwise_and(Mu27.HLTEleMuX, trigger_mask_Mu27) == trigger_mask_Mu27)]
 
-    \
-      #RelIsoMu = (TriggerEvents_Mu27.muPFChIso + TriggerEvents_Mu27.muPFNeuIso + TriggerEvents_Mu27.muPFPhoIso - (0.5 * TriggerEvents_Mu27.muPFPUIso)) / TriggerEvents_Mu27.muPt
-
-      ext = extractor()
-      ext.add_weight_sets(["IDCorr NUM_MediumID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "Trg50Corr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "Trg27Corr IsoMu24_OR_IsoTkMu24_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "IsoCorr NUM_LooseRelIso_DEN_MediumID_pt_abseta ./RunBCDEF_SF_ISO.root"])
-      ext.finalize()
-      evaluator = ext.make_evaluator()
-
-      #Define muon candidates
-      muon27 = ak.zip( 
-			{
-				"pt": TriggerEvents_Mu27.muPt,
-				"E": TriggerEvents_Mu27.muEn,
-				"eta": TriggerEvents_Mu27.muEta,
-				"phi": TriggerEvents_Mu27.muPhi,
-				"nMuon": TriggerEvents_Mu27.nMu,
-				"charge": TriggerEvents_Mu27.muCharge,
-            "D0": TriggerEvents_Mu27.muD0,
-            "Dz": TriggerEvents_Mu27.muDz,
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		)
-      muon50 = ak.zip( 
-			{
-				"pt": TriggerEvents_Mu50.muPt,
-				"E": TriggerEvents_Mu50.muEn,
-				"eta": TriggerEvents_Mu50.muEta,
-				"phi": TriggerEvents_Mu50.muPhi,
-				"nMuon": TriggerEvents_Mu50.nMu,
-				"charge": TriggerEvents_Mu50.muCharge,
-            "D0": TriggerEvents_Mu50.muD0,
-            "Dz": TriggerEvents_Mu50.muDz,
-			},
-			with_name="MuonArray",
-			behavior=candidate.behavior,
-		)
-
-      Mu50IsoCorr = evaluator["IsoCorr"](muon50.pt, muon50.eta)   
-      Mu50TrgCorr = evaluator["Trg50Corr"](muon50.pt, muon50.eta)
-      Mu50IDCorr = evaluator["IDCorr"](muon50.pt, muon50.eta)
-      Mu27IsoCorr = evaluator["IsoCorr"](muon27.pt, muon27.eta)
-      Mu27TrgCorr = evaluator["Trg27Corr"](muon27.pt, muon27.eta)
-      Mu27IDCorr = evaluator["IDCorr"](muon27.pt, muon27.eta)
-      Lep50Corr = Mu50IsoCorr * Mu50TrgCorr * Mu50IDCorr
-      Lep27Corr = Mu27IsoCorr * Mu27TrgCorr * Mu27IDCorr
       #LepCorr = np.append(Lep27Corr, Lep50Corr, axis=0)
       muon = ak.zip( 
 			{
-				"pt": np.concatenate((muon27.pt, muon50.pt), axis=0),
-				"E": np.concatenate((muon27.E, muon50.E), axis=0),
-				"eta": np.concatenate((muon27.eta, muon50.eta), axis=0),
-				"phi": np.concatenate((muon27.phi, muon50.phi), axis=0),
-				"nMuon": np.concatenate((muon27.nMuon, muon50.nMuon), axis=0),
-				"charge": np.concatenate((muon27.charge, muon50.charge), axis=0),
-            "D0": np.concatenate((muon27.D0, muon50.D0), axis=0),
-            "Dz": np.concatenate((muon27.Dz, muon50.Dz), axis=0),
+				"pt": np.concatenate((Mu27.muPt, Mu50.muPt), axis=0),
+				"energy": np.concatenate((Mu27.muEn, Mu50.muEn), axis=0),
+				"eta": np.concatenate((Mu27.muEta, Mu50.muEta), axis=0),
+				"phi": np.concatenate((Mu27.muPhi, Mu50.muPhi), axis=0),
+				"nMuon": np.concatenate((Mu27.nMu, Mu50.nMu), axis=0),
+				"charge": np.concatenate((Mu27.muCharge, Mu50.muCharge), axis=0),
+   		   "D0": np.concatenate(((Mu27.muD0, Mu50.muD0)), axis=0),
+           	"Dz": np.concatenate((Mu27.muDz, Mu50.muDz), axis=0),
 			},
 			with_name="MuonArray",
 			behavior=candidate.behavior,
@@ -201,44 +155,43 @@ class MyProcessor(processor.ProcessorABC):
 
       tau = ak.zip( 
 			{
-				"pt": np.concatenate((TriggerEvents_Mu27.boostedTauPt, TriggerEvents_Mu50.boostedTauPt), axis=0),
-				"E": np.concatenate((TriggerEvents_Mu27.boostedTauEnergy, TriggerEvents_Mu50.boostedTauEnergy), axis=0),
-				"Px": np.concatenate((TriggerEvents_Mu27.boostedTauPx, TriggerEvents_Mu50.boostedTauPx), axis=0),
-				"Py": np.concatenate((TriggerEvents_Mu27.boostedTauPy, TriggerEvents_Mu50.boostedTauPy), axis=0),
-				"Pz": np.concatenate((TriggerEvents_Mu27.boostedTauPz, TriggerEvents_Mu50.boostedTauPz), axis=0),
-				"mass": np.concatenate((TriggerEvents_Mu27.boostedTauMass, TriggerEvents_Mu50.boostedTauMass), axis=0),
-				"eta": np.concatenate((TriggerEvents_Mu27.boostedTauEta, TriggerEvents_Mu50.boostedTauEta), axis=0),
-				"phi": np.concatenate((TriggerEvents_Mu27.boostedTauPhi, TriggerEvents_Mu50.boostedTauPhi), axis=0),
-				"nBoostedTau": np.concatenate((TriggerEvents_Mu27.nBoostedTau, TriggerEvents_Mu50.nBoostedTau), axis=0),
-				"charge": np.concatenate((TriggerEvents_Mu27.boostedTauCharge, TriggerEvents_Mu50.boostedTauCharge), axis=0),
-				"iso": np.concatenate((TriggerEvents_Mu27.boostedTauByLooseIsolationMVArun2v1DBoldDMwLTNew, TriggerEvents_Mu50.boostedTauByLooseIsolationMVArun2v1DBoldDMwLTNew), axis=0),
-            "antiMu": np.concatenate((TriggerEvents_Mu27.boostedTauByLooseMuonRejection3, TriggerEvents_Mu50.boostedTauByLooseMuonRejection3), axis=0),
+				"pt": np.concatenate((Mu27.boostedTauPt, Mu50.boostedTauPt), axis=0),
+				"E": np.concatenate((Mu27.boostedTauEnergy, Mu50.boostedTauEnergy), axis=0),
+				"Px": np.concatenate((Mu27.boostedTauPx, Mu50.boostedTauPx), axis=0),
+				"Py": np.concatenate((Mu27.boostedTauPy, Mu50.boostedTauPy), axis=0),
+				"Pz": np.concatenate((Mu27.boostedTauPz, Mu50.boostedTauPz), axis=0),
+				"mass": np.concatenate((Mu27.boostedTauMass, Mu50.boostedTauMass), axis=0),
+				"eta": np.concatenate((Mu27.boostedTauEta, Mu50.boostedTauEta), axis=0),
+				"phi": np.concatenate((Mu27.boostedTauPhi, Mu50.boostedTauPhi), axis=0),
+				"nBoostedTau": np.concatenate((Mu27.nBoostedTau, Mu50.nBoostedTau), axis=0),
+				"charge": np.concatenate((Mu27.boostedTauCharge, Mu50.boostedTauCharge), axis=0),
+				"iso": np.concatenate((Mu27.boostedTauByLooseIsolationMVArun2v1DBoldDMwLTNew, Mu50.boostedTauByLooseIsolationMVArun2v1DBoldDMwLTNew), axis=0),
+            "antiMu": np.concatenate((Mu27.boostedTauByLooseMuonRejection3, Mu50.boostedTauByLooseMuonRejection3), axis=0),
 			},
 			with_name="TauArray",
 			behavior=candidate.behavior,
 		)
-
-      #dr cut
-      pairs = ak.cartesian({'tau': tau, 'muon': muon}, nested=False)
+      
+      #Apply cut
+      pairs = ak.cartesian({'tau': tau, 'muon': muon[:,0]}, nested=False)
       dr = self.delta_r(pairs['tau'], pairs['muon'])
-      muon_mask = ((pairs['muon'].eta < 2.4)
+      muTau_mask = ak.all((pairs['muon'].eta < 2.4)
                   & (pairs['muon'].D0 < 0.045)
-                  & (pairs['muon'].Dz < 0.2))
-      boostedTau_mask = ((pairs['tau'].pt > 20)
-                        & (np.absolute(pairs['tau'].eta) <= 2.5)
-                         & (pairs['tau'].antiMu == True)
-                         & (pairs['tau'].iso == True)) 
-      dr_cut = ((dr > .1) & (dr < .8))
-      pairs = pairs[boostedTau_mask & dr_cut]
+                  & (pairs['muon'].Dz < 0.2)
+                  & (pairs['tau'].pt > 20)
+                  & (np.absolute(pairs['tau'].eta) <= 2.5)
+                  & (pairs['tau'].antiMu == True)
+                  & (pairs['tau'].iso == True)
+                  & (dr > .1) 
+                  & (dr < .8), axis=-1)
+      pairs = pairs[muTau_mask]
 
       #Separate based on charge
       OS_pairs = pairs[(pairs['tau'].charge * pairs['muon'].charge < 0)]
       SS_pairs = pairs[(pairs['tau'].charge * pairs['muon'].charge > 0)]
 
-      #Get back the muons and taus after all cuts have been applied
-      tau_OS, mu_OS = ak.unzip(OS_pairs)
-      tau_SS, mu_SS = ak.unzip(SS_pairs)
-      if ak.sum(mu_OS.pt) == 0:
+      #If everything cut return 0
+      if ak.sum(OS_pairs['tau'].pt) == 0:
          return {
             dataset: {
             "mass": np.zeros(0),
@@ -248,31 +201,101 @@ class MyProcessor(processor.ProcessorABC):
             }
          }
 
-      muVec = self.makeVector(mu_OS, "muon")
-      tauVec = self.makeVector(tau_OS, "tau")
-      ZVec_OS = tauVec.add(muVec)
-      ZVec_OS = ZVec_OS[ZVec_OS.pt > 250]
-      muVec = self.makeVector(mu_SS, "muon")
-      tauVec = self.makeVector(tau_SS, "tau") 
-      ZVec_SS = tauVec.add(muVec)
-      ZVec_SS = ZVec_SS[ZVec_SS.pt > 250] 
+      #Define two vectors
+      #OS
+      muVec = self.makeVector(OS_pairs['muon'], "muon")
+      tauVec = self.makeVector(OS_pairs['tau'], "tau")
+      muVec50 = muVec[muVec.pt > 55]
+      muVec27 = muVec[(muVec.pt < 55) & (muVec.pt > 30)]
+      tauVec50 = tauVec[muVec.pt > 55]
+      tauVec27 = tauVec[(muVec.pt < 55) & (muVec.pt > 30)]
+      #SS
+      muVec_SS = self.makeVector(SS_pairs['muon'], "muon")
+      tauVec_SS = self.makeVector(SS_pairs['tau'], "tau")
+      muVec50_SS = muVec_SS[muVec_SS.pt > 55]
+      muVec27_SS = muVec_SS[(muVec_SS.pt < 55) & (muVec_SS.pt > 30)]
+      tauVec50_SS = tauVec_SS[muVec_SS.pt > 55]
+      tauVec27_SS = tauVec_SS[(muVec_SS.pt < 55) & (muVec_SS.pt > 30)]
+
+      #Make Z Vector
+      #OS
+      ZVec50 = tauVec50.add(muVec50)
+      ZVec27 = tauVec27.add(muVec27)
+      ZVec50 = ZVec50[ZVec50.pt > 200]
+      ZVec27 = ZVec27[ZVec27.pt > 200]
+
+      #SS
+      ZVec50_SS = tauVec50_SS.add(muVec50_SS)
+      ZVec27_SS = tauVec27_SS.add(muVec27_SS)
+      ZVec50_SS = ZVec50_SS[ZVec50_SS.pt > 200]
+      ZVec27_SS = ZVec27_SS[ZVec27_SS.pt > 200]
+
+
+      #Add weight sets
+      ext = extractor()
+      ext.add_weight_sets(["IDCorr NUM_LooseID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "Trg50Corr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "Trg27Corr IsoMu24_OR_IsoTkMu24_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "IsoCorr NUM_LooseRelIso_DEN_MediumID_pt_abseta ./RunBCDEF_SF_ISO.root", "pTCorr Ratio2D ./zmm_2d_2018.root"])
+      ext.finalize()
+      evaluator = ext.make_evaluator()
+
+      #OS
+      Mu50IsoCorr = evaluator["IsoCorr"](ZVec50.pt, ZVec50.eta)   
+      Mu50TrgCorr = evaluator["Trg50Corr"](ZVec50.pt, ZVec50.eta) 
+      Mu50IDCorr = evaluator["IDCorr"](ZVec50.pt, ZVec50.eta) 
+      Mu27IsoCorr = evaluator["IsoCorr"](ZVec27.pt, ZVec27.eta) 
+      Mu27TrgCorr = evaluator["Trg27Corr"](ZVec27.pt, ZVec27.eta) 
+      Mu27IDCorr = evaluator["IDCorr"](ZVec27.pt, ZVec27.eta) 
+
+      Lep50Corr = Mu50IsoCorr * Mu50TrgCorr * Mu50IDCorr
+      Lep27Corr = Mu27IsoCorr * Mu27TrgCorr * Mu27IDCorr
+
+      #SS
+      Mu50IsoCorr_SS = evaluator["IsoCorr"](ZVec50_SS.pt, ZVec50_SS.eta)   
+      Mu50TrgCorr_SS = evaluator["Trg50Corr"](ZVec50_SS.pt, ZVec50_SS.eta)   
+      Mu50IDCorr_SS = evaluator["IDCorr"](ZVec50_SS.pt, ZVec50_SS.eta)  
+      Mu27IsoCorr_SS = evaluator["IsoCorr"](ZVec27_SS.pt, ZVec27_SS.eta) 
+      Mu27TrgCorr_SS = evaluator["Trg27Corr"](ZVec27_SS.pt, ZVec27_SS.eta)  
+      Mu27IDCorr_SS = evaluator["IDCorr"](ZVec27_SS.pt, ZVec27_SS.eta) 
+
+      Lep50Corr_SS = Mu50IsoCorr_SS * Mu50TrgCorr_SS * Mu50IDCorr_SS
+      Lep27Corr_SS = Mu27IsoCorr_SS * Mu27TrgCorr_SS * Mu27IDCorr_SS
+
 
       XSection = self.weightCalc(name)
+
+      shape = np.shape(np.append(ak.flatten(ZVec27.mass, axis=1), ak.flatten(ZVec50.mass, axis=1)))
+      SS_shape = np.shape(np.append(ak.flatten(ZVec27_SS.mass, axis=1), ak.flatten(ZVec50_SS.mass, axis=1)))
+
+      #If not data, calculate all weight corrections
       if XSection != 1:
          luminosity = 59830.
-         weight = (XSection * luminosity) / num_events
-      else: weight = 1
+         lumiWeight = (XSection * luminosity) / num_events
+         
+         LepCorrection = np.append(ak.flatten(Lep27Corr, axis=-1), ak.flatten(Lep50Corr, axis=-1), axis=-1) 
+         #OS
+         if ("DYJets" in name) or ("WJets" in name):
+            pTCorrection27 = evaluator["pTCorr"](ZVec27.mass, ZVec27.pt)
+            pTCorrection50 = evaluator["pTCorr"](ZVec50.mass, ZVec50.pt)
+            Lep27Corr = Lep27Corr * pTCorrection27
+            Lep50Corr = Lep50Corr * pTCorrection50
+            LepCorrection = np.append(ak.flatten(Lep27Corr, axis=-1), ak.flatten(Lep50Corr, axis=-1), axis=-1)
+         
+         #SS
+         SS_LepCorrection = np.append(ak.flatten(Lep27Corr_SS, axis=-1), ak.flatten(Lep50Corr_SS, axis=-1), axis=-1) 
 
-      shape = np.shape(ak.flatten(ZVec_OS.mass, axis=1))
-      mass_w = np.full(shape=shape, fill_value=weight, dtype=np.double)
-      shape = np.shape(ak.flatten(ZVec_SS.mass, axis=1))
-      ss_mass_w = np.full(shape=shape, fill_value=weight, dtype=np.double)
+         mass_w = np.full(shape=shape, fill_value=lumiWeight, dtype=np.double)
+         mass_w = np.multiply(mass_w, ak.flatten(LepCorrection, axis=-1))
+         SS_mass_w = np.full(shape=SS_shape, fill_value=lumiWeight, dtype=np.double) 
+         SS_mass_w = np.multiply(SS_mass_w, ak.flatten(SS_LepCorrection, axis=-1))
+      else:
+         mass_w = np.full(shape=shape, fill_value=1, dtype=np.double)
+         SS_mass_w = np.full(shape=SS_shape, fill_value=1, dtype=np.double) 
+
       return {
          dataset: {
-            "mass": ak.flatten(ZVec_OS.mass, axis=1),
+            "mass": np.append(ak.flatten(ZVec27.mass, axis=-1), ak.flatten(ZVec50.mass, axis=-1), axis=-1),
             "mass_w": mass_w,
-            "ss_mass": ak.flatten(ZVec_SS.mass, axis=1),
-            "ss_mass_w": ss_mass_w
+            "ss_mass": np.append(ak.flatten(ZVec27_SS.mass, axis=-1), ak.flatten(ZVec50_SS.mass, axis=-1), axis=-1),
+            "ss_mass_w": SS_mass_w
          }
       }
    
@@ -334,7 +357,7 @@ if __name__ == "__main__":
          metadata={"dataset": dataset},
       ).events()
       string = str(sample)
-      num_events = file['hEvents'].member('fEntries')
+      num_events = file['hEvents'].member('fEntries') / 2
       out = p.process(events, fname, num_events)
       if "DY" in string:
             print("DY ", fname)
@@ -378,17 +401,17 @@ if __name__ == "__main__":
    NonQCD = np.append(np.append(DY_SS, WJets_SS, axis=0), Top_SS, axis=0)
    NonQCD_w = np.append(np.append(DY_SS_w, WJets_SS_w, axis=0), Top_SS_w, axis=0) 
 
-
+   QCDScaleFactor = 1.6996559936491136
    Data_h, Data_bins = np.histogram(Data, bins=bins)
-   Data_SS_h, Data_bins = np.histogram(Data_SS, bins=bins)
-   NonQCD_h, NonQCD_bins = np.histogram(NonQCD, bins=bins, weights=NonQCD_w)
-   QCD_h = np.subtract(Data_SS_h, NonQCD_h, dtype=object)
+   Data_SS_h, Data_SS_bins = np.histogram(Data_SS, bins=bins)
+   NonQCD_h, NonQCD_bins = np.histogram(NonQCD, bins=bins)
+   QCD_h = np.subtract(Data_SS_h, NonQCD_h, dtype=object, out=None)
    for i in range(QCD_h.size):
       if QCD_h[i] < 0.0:
          QCD_h[i] = 0.0
-   QCDScaleFactor = 1.6996559936491136
    QCD_h = QCD_h * QCDScaleFactor
-   QCD_w = np.full(shape=QCD_h.shape, fill_value=1, dtype=np.double) 
+   QCD_w = np.full(shape=QCD_h.shape, fill_value=1, dtype=np.double)
+   QCD_hist = (QCD_h, Data_SS_bins)
 
    DY_h, DY_bins = np.histogram(DY, bins=bins, weights=DY_w)
    WJets_h, WJets_bins = np.histogram(WJets, bins=bins, weights=WJets_w) 
@@ -409,10 +432,15 @@ if __name__ == "__main__":
    ax.set_xlabel("Mass (GeV)")
    fig.savefig("./singlemuon_plots/SingleMuon_VISIBLE_MASS.png")
 
-   outFile = uproot.recreate("SingleMuon_mass.root")
+   outFile = uproot.recreate("boostedHTT_mt_2018.input.root")
    DY_h = np.histogram(DY, bins=bins, weights=DY_w)
    TT_h = np.histogram(Top, bins=bins, weights=Top_w)
    VV_h = np.histogram(np.append(Diboson, SingleTop), bins=bins, weights=np.append(Diboson_w, SingleTop_w))
-   outFile["DY"] = DY_h
-   outFile["TT"] = TT_h
-   outFile["VV"] = VV_h
+   WJets_h = np.histogram(WJets, bins=bins, weights=WJets_w)
+   Data_h = np.histogram(Data, bins=bins)
+   outFile["DY_Jets_mt_1_13TeV/DYJets125"] = DY_h
+   outFile["DY_Jets_mt_1_13TeV/TT"] = TT_h
+   outFile["DY_Jets_mt_1_13TeV/VV"] = VV_h
+   outFile["DY_Jets_mt_1_13TeV/W"] = WJets_h
+   outFile["DY_Jets_mt_1_13TeV/QCD"] = QCD_hist
+   outFile["DY_Jets_mt_1_13TeV/data_obs"] = Data_h
