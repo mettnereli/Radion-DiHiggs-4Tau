@@ -53,7 +53,15 @@ def weightCalc(name):
       elif "ST_tW_antitop_5f_inclusiveDecays" in name: return 34.91
       elif "ST_tW_top_5f_inclusiveDecays" in name: return 34.97
       elif "DY" in name:
-         if "0To50" in name: return 1485
+         if "70to100" in name: return 146.5
+         elif "100to200" in name: return 160.7
+         elif "200to400" in name: return 48.63
+         elif "400to600" in name: return 6.993
+         elif "600to800" in name: return 1.761
+         elif "800to1200" in name: return 0.8021
+         elif "1200to2500" in name: return 0.1937
+         elif "2500toInf" in name: return 0.003514
+         elif "0To50" in name: return 1485
          elif "50To100" in name: return 397.4
          elif "100To250" in name: return 97.2
          elif "250To400" in name: return 3.701
@@ -91,7 +99,15 @@ def sumGenCalc(name):
     elif "ST_tW_antitop_5f_inclusiveDecays" in name: return sumGen['ST_tW_antitop_5f_inclusiveDecays']
     elif "ST_tW_top_5f_inclusiveDecays" in name: return sumGen['ST_tW_top_5f_inclusiveDecays']
     elif "DY" in name:
-        if "0To50" in name: return 2455892442182.9556
+        if "70to100" in name: return sumGen['DYJetsToLL_M-50_HT-70to100']
+        elif "100to200" in name: return sumGen['DYJetsToLL_M-50_HT-100to200']
+        elif "200to400" in name: return sumGen['DYJetsToLL_M-50_HT-200to400']
+        elif "400to600" in name: return sumGen['DYJetsToLL_M-50_HT-400to600']
+        elif "600to800" in name: return sumGen['DYJetsToLL_M-50_HT-600to800']
+        elif "800to1200" in name: return sumGen['DYJetsToLL_M-50_HT-800to1200']
+        elif "1200to2500" in name: return sumGen['DYJetsToLL_M-50_HT-1200to2500']
+        elif "2500toInf" in name: return sumGen['DYJetsToLL_M-50_HT-2500toInf']
+        elif "0To50" in name: return 2455892442182.9556
         elif "50To100" in name: return 578496149642.9556
         elif "100To250" in name: return 47895381724.01761
         elif "250To400" in name: return 363928660.5752002
@@ -347,26 +363,19 @@ class MyProcessor(processor.ProcessorABC):
         i0 = makeVector(dimuon['i0'])
         i1 = makeVector(dimuon['i1'])
         ZVec = i0.add(i1)
-
-        print(ZVec.mass)
-        print(ak.max(ZVec.mass, axis=0))
-        print(ak.max(ZVec.mass, axis=1))
-        print(ak.max(ZVec.mass, axis=-1))
-        print(ak.argmax(ZVec.mass, axis=0))
-        print(ak.argmax(ZVec.mass, axis=1))
-        print(ak.argmax(ZVec.mass, axis=-1))
-
+        if ak.any(ak.num(ZVec, axis=-1) > 1, axis=-1):
+            ZVec = ZVec[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
+            dimuon = dimuon[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
 
         ##Get weights
         if XSection != 1:            
 
-            genPairs = ak.cartesian({'genWeight': events.genWeight, 'muon': dimuon}, axis=1, nested=False)
             luminosity2018 = 59830.
             luminosity2018_A = 14000.
             luminosity2018_B = 7100.
             luminosity2018_C = 6940.
             luminosity2018_D = 31930.
-            lumiWeight = np.multiply(((XSection) / sumOfGenWeights), genPairs['genWeight'])
+            lumiWeight = np.multiply(((XSection) / sumOfGenWeights), events.genWeight)
             #lumiWeight = np.multiply((XSection * luminosity2018) / totalWeight, np.ones(np.shape(events.genWeight)))
             output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight))
             i0 = makeVector(dimuon['i0'])
@@ -585,6 +594,17 @@ WJetsArr = np.concatenate((
 
 
 DYJets_unskimmed = np.concatenate((
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-70to100_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-70to100_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151736/0000/NANO_NANO_{i}.root" for i in range( 1 , 355 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-100to200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-100to200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151751/0000/NANO_NANO_{i}.root" for i in range( 1 , 550 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-200to400_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-200to400_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151806/0000/NANO_NANO_{i}.root" for i in range( 1 , 393 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-400to600_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-400to600_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151821/0000/NANO_NANO_{i}.root" for i in range( 1 , 196 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-600to800_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-600to800_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151836/0000/NANO_NANO_{i}.root" for i in range( 1 , 162 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-800to1200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-800to1200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151851/0000/NANO_NANO_{i}.root" for i in range( 1 , 168 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-1200to2500_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-1200to2500_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151905/0000/NANO_NANO_{i}.root" for i in range( 1 , 150 )],
+[redirector+f"/2018/MC/DYJetsToLL_M-50_HT-2500toInf_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-2500toInf_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151920/0000/NANO_NANO_{i}.root" for i in range( 1 , 68 )],
+))
+
+DYJetsPt_unskimmed = np.concatenate((
     [redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133625/0000/NANO_NANO_{i}.root" for i in range( 1 , 1000 )],
     [redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133625/0001/NANO_NANO_{i}.root" for i in range( 1000 , 2000 )],
     [redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-0To50_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133625/0002/NANO_NANO_{i}.root" for i in range( 2000 , 2060 )],
