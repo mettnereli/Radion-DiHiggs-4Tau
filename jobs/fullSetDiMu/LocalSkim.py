@@ -40,27 +40,27 @@ def weightCalc(name):
       TT_Had_BR= 0.4544
 
       if "Data" in name: return 1
-      elif "WZTo1L1Nu2Q" in name: return 10.71
-      elif "WZTo1L3Nu" in name: return 3.05
-      elif "WZTo2Q2L" in name: return 6.419
-      elif "WWTo1L1Nu2Q" in name: return 49.997
-      elif "ZZTo2Q2L" in name: return 3.22
+      elif "WZTo1L1Nu2Q" in name: return 9.119
+      elif "WZTo1L3Nu" in name: return 3.414
+      elif "WZTo2Q2L" in name: return 6.565
+      elif "WWTo1L1Nu2Q" in name: return 51.65
+      elif "ZZTo2Q2L" in name: return 3.676
       elif "ZZTo4L" in name: return 1.325
-      elif "ZZTo2Nu2Q" in name: return 4.04
+      elif "ZZTo2Nu2Q" in name: return 4.545
       elif "ST_s-channel_4f_leptonDecays" in name: return 3.549
-      elif "ST_t-channel_antitop_4f_InclusiveDecays" in name: return 69.09
-      elif "ST_t-channel_top_4f_InclusiveDecays" in name: return 115.3
-      elif "ST_tW_antitop_5f_inclusiveDecays" in name: return 34.91
-      elif "ST_tW_top_5f_inclusiveDecays" in name: return 34.97
+      elif "ST_t-channel_antitop_4f_InclusiveDecays" in name: return 67.93
+      elif "ST_t-channel_top_4f_InclusiveDecays" in name: return 113.4
+      elif "ST_tW_antitop_5f_inclusiveDecays" in name: return 32.51
+      elif "ST_tW_top_5f_inclusiveDecays" in name: return 32.45
       elif "DY" in name:
-         if "70to100" in name: return 146.5
-         elif "100to200" in name: return 160.7
-         elif "200to400" in name: return 48.63
-         elif "400to600" in name: return 6.993
-         elif "600to800" in name: return 1.761
-         elif "800to1200" in name: return 0.8021
-         elif "1200to2500" in name: return 0.1937
-         elif "2500toInf" in name: return 0.003514
+         if "70to100" in name: return 140
+         elif "100to200" in name: return 139.2
+         elif "200to400" in name: return 38.4
+         elif "400to600" in name: return 5.174
+         elif "600to800" in name: return 1.258
+         elif "800to1200" in name: return 0.5598
+         elif "1200to2500" in name: return 0.1305
+         elif "2500toInf" in name: return 0.002997
          elif "0To50" in name: return 1485
          elif "50To100" in name: return 397.4
          elif "100To250" in name: return 97.2
@@ -68,14 +68,14 @@ def weightCalc(name):
          elif "400To650" in name: return 0.5086
          elif "650ToInf" in name: return 0.04728
       elif "WJets" in name:
-         if "70To100" in name: return 1264
-         elif "100To200" in name: return 1256
-         elif "200To400" in name: return 335.5
-         elif "400To600" in name: return 45.25
-         elif "600To800" in name: return 91.16
-         elif "800To1200" in name: return 4.933
-         elif "1200To2500" in name: return 1.16
-         elif "2500ToInf" in name: return 0.008001 
+         if "70To100" in name: return 1283
+         elif "100To200" in name: return 1244
+         elif "200To400" in name: return 337.8
+         elif "400To600" in name: return 44.93
+         elif "600To800" in name: return 11.19
+         elif "800To1200" in name: return 4.926
+         elif "1200To2500" in name: return 1.152
+         elif "2500ToInf" in name: return 0.02646
       elif "TTTo" in name:
          if "2L2Nu" in name: return 87.31
          elif "Hadronic" in name: return 378.93
@@ -278,18 +278,24 @@ class MyProcessor(processor.ProcessorABC):
         
         #Extra muon veto
         output[dataset]["numMuon_pre"].fill(num=ak.num(events.Muon))
-        #mmuon = events.Muon[(ak.num(events.Muon) > 2)]
-        #badMuon =  ((mmuon[:,2:].pfRelIso04_all > .3) & (mmuon[:,2:].pt > 10) & (mmuon.tightId[:,2:]))
-        #dimuon = dimuon[ak.any(badMuon, axis=-1) == False]
-        #events = events[(ak.num(dimuon, axis=-1) > 0)]
-        #dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        #output[dataset]["numMuon_post"].fill(num=ak.num(events.Muon))
-        #output[dataset]["hcount"].fill(count= np.ones(len(events))* 4)
+        i0_pass = (dimuon['i0'].pfRelIso04_all < .3) & (dimuon['i0'].pt > 10) & (dimuon['i0'].tightId) #if leading mu passes cut
+        i1_pass = (dimuon['i1'].pfRelIso04_all < .3) & (dimuon['i1'].pt > 10) & (dimuon['i1'].tightId) #if subleading mu passes cut
+        #check if all muons pass cut
+        extraMuon = events.Muon[((events.Muon.pfRelIso04_all < .3) & (events.Muon.pt > 10) & (events.Muon.tightId))] 
+        overallVeto = (ak.num(extraMuon, axis=-1) < 3)
+        Extra2Veto = i0_pass & i1_pass & (ak.num(extraMuon, axis=-1) == 2)
+        Extrai0Veto = i0_pass & (ak.num(extraMuon, axis=-1) == 1)
+        Extrai1Veto = i1_pass & (ak.num(extraMuon, axis=-1) == 1)
+        dimuon = dimuon[overallVeto | Extra2Veto | Extrai0Veto | Extrai1Veto]
+        events = events[(ak.num(dimuon, axis=-1) > 0)]
+        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
+        output[dataset]["numMuon_post"].fill(num=ak.num(events.Muon))
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 4)
 
         
     
         #Jet Vetos
-        goodJets= events.Jet[(events.Jet.jetId > 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 3.0)]
+        goodJets= events.Jet[(events.Jet.jetId >= 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 3.0)]
         HT = ak.sum(goodJets.pt, axis=-1)
         dimuon = dimuon[(HT > 200)]
         events = events[(ak.num(dimuon, axis=-1) > 0)]
@@ -332,7 +338,7 @@ class MyProcessor(processor.ProcessorABC):
         dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
         output[dataset]["hcount"].fill(count= np.ones(len(events))* 8) 
         output[dataset]["zPt"].fill(pt= ak.ravel(ZVec.pt)) 
-
+        
         if len(events.MET) == 0: return output
         if len(events.MET.pt) == 0: return output
         #Create MET Vector
@@ -401,6 +407,7 @@ class MyProcessor(processor.ProcessorABC):
             output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight))
 
             lepCorr = MuIsoCorr * MuIDCorr * Mu50TrgCorr * lumiWeight * puWeight
+            #lepCorr = np.ones(np.shape(Z.mass)) * lumiWeight
             if ("DYJets" in name): 
                 pTCorrection = evaluator["pTCorr"](Z.mass, Z.pt)
                 lepCorr = lepCorr * pTCorrection
@@ -476,7 +483,6 @@ mc_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/DiM
 data_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/DiMu/2018/Data"
 redirector = "root://cmsxrootd.hep.wisc.edu//store/user/gparida/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 redirector2 = "root://cmsxrootd.hep.wisc.edu//store/user/cgalloni/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
-
 
 
 DYJetsArr = np.concatenate((
@@ -702,7 +708,7 @@ Arr2018D_unskimmed = np.concatenate((
 
 
 DYJets_fileset = {
-    "DYJets": DYJets_unskimmed.tolist(),
+    "DYJets": DYJetsArr.tolist(),
 }
 
 Data_fileset = {
