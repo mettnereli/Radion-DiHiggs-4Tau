@@ -82,6 +82,7 @@ def weightCalc(name):
          print("Something's Wrong!")
          return 1.0
 
+
 #Contains sum of all gen weights (for luminosity reweighting)
 def sumGenCalc(name):
     if "Data" in name: return 1
@@ -192,9 +193,11 @@ class MyProcessor(processor.ProcessorABC):
     def accumulator(self):
         return self._accumulator
 
+
     #MAIN PROCESS CODE STARTS HERE
     def process(self,events):
         dataset = events.metadata["dataset"]
+        
         print("Running new event")
         ax = hist.axis.Regular(30, 0, 150, flow=False, name="mass", label=dataset)
         output = {}
@@ -202,16 +205,8 @@ class MyProcessor(processor.ProcessorABC):
 
         #Create dictionary containing all histograms to be written
         output[dataset] =  {
-            "mass_total": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "mass_A": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "mass_B": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "mass_C": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "mass_D": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "ss_mass_total": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "ss_mass_A": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "ss_mass_B": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "ss_mass_C": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
-            "ss_mass_D": Hist(hist.axis.Regular(12, 60, 120, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
+            "mass": Hist(hist.axis.Regular(30, 0, 150, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
+            "ss_mass": Hist(hist.axis.Regular(30, 0, 150, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
             "pt": Hist(hist.axis.Regular(30, 150, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
             "ss_pt": Hist(hist.axis.Regular(30, 150, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
             "eta": Hist(hist.axis.Regular(40, -4, 4, flow=False, name="eta", label=dataset), storage=hist.storage.Weight()),
@@ -223,143 +218,133 @@ class MyProcessor(processor.ProcessorABC):
             "Trg50Corr": Hist(hist.axis.Regular(40, 0, 2, flow=False, name="Trg50Corr", label=dataset), storage=hist.storage.Weight()),
             "puCorr": Hist(hist.axis.Regular(40, 0, 2, flow=False, name="puCorr", label=dataset), storage=hist.storage.Weight()),
             "lepCorr": Hist(hist.axis.Regular(100, -2, 2, flow=False, name="lepCorr", label=dataset), storage=hist.storage.Weight()),
+            "dr": Hist(hist.axis.Regular(40, 0, 1, flow=False, name="dr", label=dataset), storage=hist.storage.Weight()),
+            "dr_test": Hist(hist.axis.Regular(40, 0, 1, flow=False, name="dr", label=dataset), storage=hist.storage.Weight()),
             "muPt": Hist(hist.axis.Regular(50, 29, 200, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
-            "subMuPt": Hist(hist.axis.Regular(50, 29, 200, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
+            "tauPt": Hist(hist.axis.Regular(50, 29, 200, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
+            "total": Hist(hist.axis.Regular(2, 0, 2, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
             "hcount": Hist(hist.axis.Regular(12, 0, 12, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
-            "total": Hist(hist.axis.Regular(12, 0, 12, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
             "tmass": Hist(hist.axis.Regular(150, 0, 150, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
             "zPt": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
-            "HiggsPt": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
-            "numEle_pre": Hist(hist.axis.Regular(11, 0, 10, flow=False, name="num", label=dataset)),
-            "numEle_post": Hist(hist.axis.Regular(11, 0, 10, flow=False, name="num", label=dataset)),
-            "numMuon_pre": Hist(hist.axis.Regular(11, 0, 10, flow=False, name="num", label=dataset)),
-            "numMuon_post": Hist(hist.axis.Regular(11, 0, 10, flow=False, name="num", label=dataset)),
-            "numbJet": Hist(hist.axis.Regular(11, 0, 10, flow=False, name="num", label=dataset)),
+            "HiggsPt": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight())
         }      
-
         #Fill histograms (starting with total number of events)
         output[dataset]["total"].fill(count= np.ones(len(events)))
 
         #Get name
         name = str(events.metadata["filename"])
 
-        #Get XS Value
+        #Get function calls from above
         XSection = weightCalc(name)
-
-        #Get sum of Gen Weights
         sumOfGenWeights = sumGenCalc(name)
-
-        #Get total weights
         totalWeight = totalEventCalc(name)
 
-        #Trigger, muon selection, remaining cuts
-        events = events[ak.num(events.Muon) > 1]
-        events = events[events.HLT.Mu50]
 
-        #ak.combinations - creates pairs from all muons in events, names them with fields 'i0' and 'i1'
-        dimuon = ak.combinations(events.Muon, 2, fields=['i0', 'i1']) 
-        MuID = (dimuon['i0'].tightId) & (np.abs(dimuon['i0'].dz) < 0.2) & (np.abs(dimuon['i0'].dxy) < 0.045)
-        SubMuID = (dimuon['i1'].tightId) & (np.abs(dimuon['i1'].dz) < 0.2) & (np.abs(dimuon['i1'].dxy) < 0.045)
-        dr = dimuon['i0'].delta_r(dimuon['i1'])
-        cut = ((np.abs(dimuon['i0'].eta) < 2.4)
+        #Select events with at least one muon, at least one tau, met pt > 30, passing either Mu27 or Mu50 HLT
+        events = events[(ak.num(events.Muon) > 0)]
+        events = events[(ak.num(events.boostedTau) > 0)]
+        events = events[events.MET.pt > 30]
+        events = events[events.HLT.Mu27 | events.HLT.Mu50]
+        output[dataset]["hcount"].fill(count= np.ones(len(events)) * 2)    
+
+
+        #Split into pairs - ak.cartesian creates pairs of all boostedTaus and Muons in event, a columnar for-loop equivalent
+        pairs = ak.cartesian({'tau': events.boostedTau, 'muon': events.Muon}, axis=1, nested=False) 
+        MuID = (pairs['muon'].tightId) & (np.abs(pairs['muon'].dz) < 0.2) & (np.abs(pairs['muon'].dxy) < 0.045)
+        dr = pairs['muon'].delta_r(pairs['tau'])
+
+        #Apply cuts to pairs
+        pairs = pairs[((np.abs(pairs['muon'].eta) < 2.4)
               & (MuID)
-              & (dimuon['i0'].pt > 52)
-              & (dimuon['i1'].pt > 10)
-              & (np.abs(dimuon['i1'].eta) < 2.4)
-              & (SubMuID)
+              & (pairs['muon'].pt > 28)
+              & (pairs['tau'].pt > 30)
+              & (np.absolute(pairs['tau'].eta) < 2.3)
+              & (pairs['tau'].idAntiMu >= 2)
+              & (pairs['tau'].idDecayModeNewDMs)
+              & (pairs['tau'].idMVAnewDM2017v2 >= 4)
+              & (pairs['tau'].idAntiEle2018 >= 2)
               & (dr > .1)
-              & (dr < .8))
+              & (dr < .8))]
 
-        #"dimuon" array contains all dimuon pairs. Cut is applied to it
-        dimuon = dimuon[cut]
-        #If the cut removed all possible dimuon pairs in an event, also remove that event from the event array
-        # [ event, event, eventwithnopairs] -> [event, event]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        #If dimuon has an empty event "[[stuff], [stuff], []]" just get rid of it ->  "[[stuff], [stuff]]"
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        #This process is repeated throughout
+        #Remove events that contain no valid pairs
+        events = events[ak.num(pairs, axis=-1) > 0]
+        #Remove empty events from pair array [[pair], [pair], []] -> [[pair], [pair]]
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
         
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 2)
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 3)
 
 
         #Extra Electron veto
         electron = events.Electron
-        output[dataset]["numEle_pre"].fill(num=ak.num(events.Electron))
         ele_cut = (electron.pt >= 15) & (np.abs(electron.eta) <= 2.5) & electron.mvaIso_WPL
-        dimuon = dimuon[(ak.any(ele_cut, axis=-1) == False)]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["numEle_post"].fill(num= ak.num(events.Electron))
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 3)
+        pairs = pairs[(ak.any(ele_cut, axis=-1) == False)]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
 
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 4)
         
         #Extra muon veto
-        output[dataset]["numMuon_pre"].fill(num=ak.num(events.Muon))
-        i0_pass = (dimuon['i0'].pfRelIso04_all < .3) & (dimuon['i0'].pt > 10) & (dimuon['i0'].tightId) #if leading mu passes cut
-        i1_pass = (dimuon['i1'].pfRelIso04_all < .3) & (dimuon['i1'].pt > 10) & (dimuon['i1'].tightId) #if subleading mu passes cut
+        i0_pass = (pairs['muon'].pfRelIso04_all < .3) & (pairs['muon'].pt > 10) & (pairs['muon'].tightId) #if leading mu passes cut
         #check if all muons pass cut
         extraMuon = events.Muon[((events.Muon.pfRelIso04_all < .3) & (events.Muon.pt > 10) & (events.Muon.tightId))] 
-        overallVeto = (ak.num(extraMuon, axis=-1) < 3)
-        Extra2Veto = i0_pass & i1_pass & (ak.num(extraMuon, axis=-1) == 2)
-        Extrai0Veto = i0_pass & (ak.num(extraMuon, axis=-1) == 1)
-        Extrai1Veto = i1_pass & (ak.num(extraMuon, axis=-1) == 1)
-        dimuon = dimuon[overallVeto | Extra2Veto | Extrai0Veto | Extrai1Veto]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["numMuon_post"].fill(num=ak.num(events.Muon))
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 4)
-
+        overallVeto = (ak.num(extraMuon, axis=-1) < 2)
+        ExtraVeto = i0_pass & (ak.num(extraMuon, axis=-1) == 1)
+        pairs = pairs[overallVeto | ExtraVeto]
+        events = events[(ak.num(pairs, axis=-1) > 0)]
+        pairs = pairs[(ak.num(pairs, axis=-1) > 0)]
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 5)
         
-    
-        #Jet Vetos - HT
+        #Jets - HT
         goodJets= events.Jet[(events.Jet.jetId >= 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 3.0)]
         HT = ak.sum(goodJets.pt, axis=-1)
-        dimuon = dimuon[(HT > 200)]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 5)
-
+        pairs = pairs[(HT > 200)]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
         
-        ##!!!!!!!!!!!!!!! change btagdeepflavb for each year https://btv-wiki.docs.cern.ch/ScaleFactors/UL2018/
-        #bJet veto
-        bJets = (events.Jet.btagDeepFlavB > .7100) & (events.Jet.jetId >= 2) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.4)
-        output[dataset]["numbJet"].fill(num=ak.num(events.Jet[bJets]))
-        dimuon = dimuon[ak.any(bJets, axis=-1) == False]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
         output[dataset]["hcount"].fill(count= np.ones(len(events))* 6)
 
+        #BJet Veto
+        #!!!!!!!!!!!!!!! change btagdeepflavb for each year https://btv-wiki.docs.cern.ch/ScaleFactors/UL2018/
+        bJets = (events.Jet.btagDeepFlavB > .7100) & (events.Jet.jetId >= 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.4)
+        pairs = pairs[ak.any(bJets, axis=-1) == False]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
+        
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 7)   
 
-        ##Define two 4Vectors
-        i0 = makeVector(dimuon['i0'])
-        i1 = makeVector(dimuon['i1'])
 
-        #If for whatever reason all events have been cut already, stop wasting process time and just return
+        
+        #Define 4Vectors
+        muon = makeVector(pairs['muon'])
+        tau = makeVector(pairs['tau'])
+
+        #If all events are gone, just return now
         if len(events.MET) == 0: return output
         if len(events.MET.pt) == 0: return output
 
         #TMass Cut
-        tmass = np.sqrt(np.square(i0.pt + events.MET.pt) - np.square(i0.px + events.MET.pt * np.cos(events.MET.phi)) - np.square(i0.py + events.MET.pt * np.sin(events.MET.phi)))
-        tmass_cut = tmass < 40
-        dimuon = dimuon[tmass_cut]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 7)
+        tmass = np.sqrt(np.square(muon.pt + events.MET.pt) - np.square(muon.px + events.MET.pt * np.cos(events.MET.phi)) - np.square(muon.py + events.MET.pt * np.sin(events.MET.phi)))
+        pairs = pairs[tmass < 40]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 8)
         output[dataset]["tmass"].fill(mass=ak.ravel(tmass))
 
-        #Z pt cut
-        i0 = makeVector(dimuon['i0'])
-        i1 = makeVector(dimuon['i1'])
-        ZVec = i0.add(i1)  
+        #ZVec pt cut
+        muon = makeVector(pairs['muon'])
+        tau = makeVector(pairs['tau'])
+        ZVec = tau.add(muon)
         ptCut = (ZVec.pt > 200)
-        dimuon = dimuon[ptCut]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 8) 
+        pairs = pairs[ptCut]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 9) 
 
-        #Similar check again
+        #Same check again if no events
         if len(events.MET) == 0: return output
         if len(events.MET.pt) == 0: return output
+
+
         
         #Create MET Vector
         MetVec =  ak.zip(
@@ -373,168 +358,249 @@ class MyProcessor(processor.ProcessorABC):
         behavior=vector.behavior,
         ) 
 
-        #Higgs pt cut
-        i0 = makeVector(dimuon['i0'])
-        i1 = makeVector(dimuon['i1'])
-        ZVec = i0.add(i1)        
+        #Higgs PT cut
+        muon = makeVector(pairs['muon'])
+        tau = makeVector(pairs['tau'])
+        ZVec = tau.add(muon)        
         Higgs = ZVec.add(MetVec)
         HiggsCut = (Higgs.pt > 250) 
-        dimuon = dimuon[HiggsCut]
-        events = events[ak.num(dimuon, axis=1) > 0]       
-        dimuon = dimuon[ak.num(dimuon, axis=1) > 0] 
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 9)
+        
+        pairs = pairs[HiggsCut]
+        events = events[ak.num(pairs, axis=-1) > 0]       
+        pairs = pairs[ak.num(pairs, axis=-1) > 0] 
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 10)
         output[dataset]["HiggsPt"].fill(pt= ak.ravel(Higgs.pt)) 
-
         
         #Create Z Candidate and select one Z Candidate per event
-        i0 = makeVector(dimuon['i0'])
-        i1 = makeVector(dimuon['i1'])
-        ZVec = i0.add(i1)
+        muon = makeVector(pairs['muon'])
+        tau = makeVector(pairs['tau'])
+        ZVec = tau.add(muon)
         #If there are multiple Z Candidates per event:
         if ak.any(ak.num(ZVec, axis=-1) > 1, axis=-1):
             #Select whichever Z Candidate has closest mass to 91.187, and make sure dimuon keeps that too
             ZVec = ZVec[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
-            dimuon = dimuon[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
-        
-        ##Get weights if not Data (if data, XSection = 1)
-        if XSection != 1:             
+            pairs = pairs[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
 
+        #Split events by trigger - if between 27 and 52 pt and passing isolation, then it is Mu27. Any pt >= 52 if Mu50
+        trg27 = ((pairs['muon'].pt >= 27)
+              & (pairs['muon'].pt < 52)
+              & (pairs['muon'].pfRelIso04_all > .3))
+        trg50 = ((pairs['muon'].pt >= 52))
+
+        #Get weights
+        if XSection != 1: 
+            #Apply trigger
+            pairs27 = pairs[trg27]
+            pairs50 = pairs[trg50]
+
+            #Split by trigger 
+            events27 = events[ak.num(pairs27, axis=1) > 0]       
+            pairs27 = pairs[ak.num(pairs27, axis=1) > 0] 
+
+            events50 = events[ak.num(pairs50, axis=1) > 0]       
+            pairs50 = pairs[ak.num(pairs50, axis=1) > 0] 
+
+            output[dataset]["hcount"].fill(count= np.ones(len(events27))* 11 )
+            output[dataset]["hcount"].fill(count= np.ones(len(events50))* 11 )
+
+
+            #Luminosity reweighting
             luminosity2018 = 59830.
-            luminosity2018_A = 14000.
-            luminosity2018_B = 7100.
-            luminosity2018_C = 6940.
-            luminosity2018_D = 31930.
-            #Luminosity weight - XSection / sumOfGenWeights, multiplied by the genWeight for each event
-            lumiWeight = np.multiply(((XSection) / sumOfGenWeights), events.genWeight)
-            #lumiWeight = np.multiply((XSection * luminosity2018) / totalWeight, np.ones(np.shape(events.genWeight)))
-            #Fill weight into histogram (note: ak.ravel removes extra nesting so it's just a 1D array of all events for fill)
-            output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight))
-            
-            #Make new vectors
-            i0 = makeVector(dimuon['i0'])
-            i1 = makeVector(dimuon['i1'])     
+            lumiWeight27 = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events27.genWeight)
+            lumiWeight50 = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events50.genWeight)
 
-            output[dataset]["muPt"].fill(pt=ak.ravel(i0.pt), weight=ak.ravel(lumiWeight) * luminosity2018)
-            output[dataset]["subMuPt"].fill(pt=ak.ravel(i1.pt), weight=ak.ravel(lumiWeight) * luminosity2018)
+            #If statement to make sure that that there are still events that pass Mu27
+            if len(events27.genWeight) > 0:
+                #Fill weights for Mu27
+                output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight27))
+                mu27 = makeVector(pairs27['muon'])
+                tau27 = makeVector(pairs27['tau'])
 
-            #Make Z again
-            Z = i0.add(i1)
-            output[dataset]["zPt"].fill(pt=ak.ravel(Z.pt), weight=ak.ravel(lumiWeight) * luminosity2018)
-            MuIsoCorr = evaluator["IsoCorr"](Z.pt, Z.eta)
-            output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr))
-            
-            MuIDCorr = evaluator["IDCorr"](Z.pt, Z.eta)
-            output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr))
-            
-            Mu50TrgCorr = evaluator["Trg50Corr"](Z.pt, Z.eta)
-            output[dataset]["Trg50Corr"].fill(Trg50Corr= ak.ravel(Mu50TrgCorr))
-            
-            puTrue = np.array(np.rint(events.Pileup.nTrueInt), dtype=np.int8)
-            puWeight = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue, 'nominal')
-            output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight))
+                output[dataset]["muPt"].fill(pt=ak.ravel(mu27.pt), weight=ak.ravel(lumiWeight27))
+                output[dataset]["tauPt"].fill(pt=ak.ravel(tau27.pt), weight=ak.ravel(lumiWeight27))
 
-            #Combine all weighting arrays together
-            lepCorr = MuIsoCorr * MuIDCorr * Mu50TrgCorr * lumiWeight * puWeight
+                Z27 = tau27.add(mu27)
 
-            #Also at pTCorrection if DYJets bkg
-            if ("DYJets" in name): 
-                pTCorrection = evaluator["pTCorr"](Z.mass, Z.pt)
-                lepCorr = lepCorr * pTCorrection
+                #Only take events between 0 and 150 GeV mass
+                Z27 = Z27[(Z27.mass < 150)]
 
-            output[dataset]["lepCorr"].fill(lepCorr=(ak.ravel(lepCorr)))
-           
-            #Split into OS and SS regions
-            Z_OS = Z[dimuon['i0'].charge + dimuon['i1'].charge == 0]
-            Z_SS = Z[dimuon['i0'].charge + dimuon['i1'].charge != 0]
-            lepCorr_OS = lepCorr[dimuon['i0'].charge + dimuon['i1'].charge == 0]
-            lepCorr_SS = lepCorr[dimuon['i0'].charge + dimuon['i1'].charge != 0]
+                
+                output[dataset]["zPt"].fill(pt= ak.ravel(Z27.pt), weight=ak.ravel(lumiWeight27)) 
+                MuIsoCorr27 = evaluator["IsoCorr"](Z27.pt, Z27.eta)
+                output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr27))
 
-            #Select only between 60 and 120 GeV
-            Z_OS = (Z_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
-            Z_SS = (Z_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
-            lepCorr_OS = (lepCorr_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
-            lepCorr_SS = (lepCorr_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
+                MuIDCorr27 = evaluator["IDCorr"](Z27.pt, Z27.eta)
+                output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr27))
+
+                Mu27TrgCorr = evaluator["Trg27Corr"](Z27.pt, Z27.eta)
+                output[dataset]["Trg27Corr"].fill(Trg27Corr = ak.ravel(Mu27TrgCorr))
+
+                puTrue27 = np.array(np.rint(events27.Pileup.nTrueInt), dtype=np.int8)
+                puWeight27 = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue27, 'nominal')
+                output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight27))
+
+                #Combine weights for Mu27
+                lepCorr_27 = MuIsoCorr27 * MuIDCorr27 * Mu27TrgCorr * puWeight27 * lumiWeight27 
+                if ("DYJets" in name): 
+                    pTCorrection27 = evaluator["pTCorr"](Z27.mass, Z27.pt)
+                    lepCorr_27 = lepCorr_27 * pTCorrection27
+                    
+                output[dataset]["lepCorr"].fill(lepCorr=ak.ravel(lepCorr_27))
+
+                
+                #Split by sign
+                Z27_OS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1], axis=1)
+                Z27_SS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1], axis=1)
+                lepCorr27_OS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge == 0], axis=1)
+                lepCorr27_SS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge != 0], axis=1)
+
+                
+                #Fill
+                output[dataset]["mass"].fill(mass=Z27_OS.mass, weight=lepCorr27_OS)
+                output[dataset]["ss_mass"].fill(mass=Z27_SS.mass, weight=lepCorr27_SS)
+                output[dataset]["pt"].fill(pt=Z27_OS.pt, weight=lepCorr27_OS)
+                output[dataset]["ss_pt"].fill(pt=Z27_SS.pt, weight=lepCorr27_SS)
+                output[dataset]["eta"].fill(eta=Z27_OS.eta, weight=lepCorr27_OS)
+                output[dataset]["ss_eta"].fill(eta=Z27_SS.eta, weight=lepCorr27_SS)
+
+            #If statement to make sure that that there are still events that pass Mu50
+            if len(events50.genWeight) > 0:
+                #Fill weights
+                output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight50))
+    
+                mu50 = makeVector(pairs50['muon'])      
+                tau50 = makeVector(pairs50['tau'])  
+    
+                output[dataset]["muPt"].fill(pt=ak.ravel(mu50.pt), weight=ak.ravel(lumiWeight50))
+                output[dataset]["tauPt"].fill(pt=ak.ravel(tau50.pt), weight=ak.ravel(lumiWeight50))
+                
+                Z50 = tau50.add(mu50)
+                #Only take events between 0 and 150 GeV mass
+                Z50 = Z50[(Z50.mass < 150)]
+                
+
+                
+                output[dataset]["zPt"].fill(pt= ak.ravel(Z50.pt), weight=ak.ravel(lumiWeight50))    
+                MuIsoCorr50 = evaluator["IsoCorr"](Z50.pt, Z50.eta)
+                output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr50))
+                
+                MuIDCorr50 = evaluator["IDCorr"](Z50.pt, Z50.eta)
+                output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr50))
+                 
+                Mu50TrgCorr = evaluator["Trg50Corr"](Z50.pt, Z50.eta)
+                output[dataset]["Trg50Corr"].fill(Trg50Corr= ak.ravel(Mu50TrgCorr))
+                
+                puTrue50 = np.array(np.rint(events50.Pileup.nTrueInt), dtype=np.int8)
+                puWeight50 = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue50, 'nominal')
+                output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight50))
+
+                #Combine all weights
+                lepCorr_50 = MuIsoCorr50 * MuIDCorr50 * Mu50TrgCorr * puWeight50 * lumiWeight50
+                #Add pTCorrection if DYJets
+                if ("DYJets" in name): 
+                    pTCorrection50 = evaluator["pTCorr"](Z50.mass, Z50.pt)
+                    lepCorr_50 = lepCorr_50 * pTCorrection50
+    
+                output[dataset]["lepCorr"].fill(lepCorr=ak.ravel(lepCorr_50))
+
+                #Split by sign
+                Z50_OS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1], axis=1)
+                Z50_SS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1], axis=1)
+                lepCorr50_OS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge == 0], axis=1)
+                lepCorr50_SS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge != 0], axis=1)
 
 
-            #Fill all remaining histograms
-            output[dataset]["mass_total"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS) * luminosity2018)
-            output[dataset]["mass_A"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS) * luminosity2018_A)
-            output[dataset]["mass_B"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS) * luminosity2018_B)
-            output[dataset]["mass_C"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS) * luminosity2018_C)
-            output[dataset]["mass_D"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS) * luminosity2018_D)
-            
-            output[dataset]["ss_mass_total"].fill(mass=ak.ravel(Z_SS.mass), weight=ak.ravel(lepCorr_SS) * luminosity2018)
-            output[dataset]["ss_mass_A"].fill(mass=ak.ravel(Z_SS.mass), weight=ak.ravel(lepCorr_SS) * luminosity2018_A)
-            output[dataset]["ss_mass_B"].fill(mass=ak.ravel(Z_SS.mass), weight=ak.ravel(lepCorr_SS) * luminosity2018_B)
-            output[dataset]["ss_mass_C"].fill(mass=ak.ravel(Z_SS.mass), weight=ak.ravel(lepCorr_SS) * luminosity2018_C)
-            output[dataset]["ss_mass_D"].fill(mass=ak.ravel(Z_SS.mass), weight=ak.ravel(lepCorr_SS) * luminosity2018_D)
-            
-            output[dataset]["pt"].fill(pt=ak.ravel(Z_OS.pt), weight=ak.ravel(lepCorr_OS))
-            
-            output[dataset]["ss_pt"].fill(pt=ak.ravel(Z_SS.pt), weight=ak.ravel(lepCorr_SS))
-
-            output[dataset]["eta"].fill(eta=ak.ravel(Z_OS.eta), weight=ak.ravel(lepCorr_OS))
-            
-            output[dataset]["ss_eta"].fill(eta=ak.ravel(Z_SS.eta), weight=ak.ravel(lepCorr_SS))
+                #Output histograms
+                output[dataset]["mass"].fill(mass=Z50_OS.mass, weight=lepCorr50_OS)
+                output[dataset]["ss_mass"].fill(mass=Z50_SS.mass, weight=lepCorr50_SS)
+                output[dataset]["pt"].fill(pt=Z50_OS.pt, weight=lepCorr50_OS)
+                output[dataset]["ss_pt"].fill(pt=Z50_SS.pt, weight=lepCorr50_SS)
+                output[dataset]["eta"].fill(eta=Z50_OS.eta, weight=lepCorr50_OS)
+                output[dataset]["ss_eta"].fill(eta=Z50_SS.eta, weight=lepCorr50_SS)
             return output 
-        else:
-            #This is if Data
+        else: #If Data (XSection = 1)
+            #Apply trigger
+            pairs27 = pairs[trg27]
+            pairs50 = pairs[trg50]
 
-            #Make vectors
-            i0 = makeVector(dimuon['i0'])
-            i1 = makeVector(dimuon['i1'])     
+            #Separate by trigger
+            events27 = events[ak.num(pairs27, axis=1) > 0]       
+            pairs27 = pairs[ak.num(pairs27, axis=1) > 0] 
 
+            events50 = events[ak.num(pairs50, axis=1) > 0]       
+            pairs50 = pairs[ak.num(pairs50, axis=1) > 0] 
 
-            output[dataset]["muPt"].fill(pt=ak.ravel(i0.pt))
-            output[dataset]["subMuPt"].fill(pt=ak.ravel(i1.pt))
+            output[dataset]["hcount"].fill(count= np.ones(len(events27))* 11 )
+            output[dataset]["hcount"].fill(count= np.ones(len(events50))* 11 )
+            
 
-            #Make Z Candidate
-            Z = i0.add(i1)
+            
+            mu27 = makeVector(pairs27['muon'])
+            mu50 = makeVector(pairs50['muon'])      
+            tau27 = makeVector(pairs27['tau'])
+            tau50 = makeVector(pairs50['tau'])  
+
+            output[dataset]["muPt"].fill(pt=ak.ravel(mu27.pt))
+            output[dataset]["muPt"].fill(pt=ak.ravel(mu50.pt))
+            output[dataset]["tauPt"].fill(pt=ak.ravel(tau27.pt))
+            output[dataset]["tauPt"].fill(pt=ak.ravel(tau50.pt))
+
+            output[dataset]["dr"].fill(dr=ak.ravel(tau27.delta_r(mu27)))
+            output[dataset]["dr"].fill(dr=ak.ravel(tau50.delta_r(mu50)))
+
+            #Create Z Vecs
+            Z27 = tau27.add(mu27)
+            Z50 = tau50.add(mu50)
+
+            #Keep mass between 0 and 150
+            Z27 = Z27[Z27.mass < 150]
+            Z50 = Z50[Z50.mass < 150]
 
             #Split by sign
-            Z_OS = Z[dimuon['i0'].charge + dimuon['i1'].charge == 0]
-            Z_SS = Z[dimuon['i0'].charge + dimuon['i1'].charge != 0]
+            Z27_OS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1], axis=1)
+            Z27_SS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1], axis=1)
 
+            Z50_OS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1], axis=1)
+            Z50_SS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1], axis=1)
 
-            #Select only between 60 and 120
-            Z_OS = (Z_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
-            Z_SS = (Z_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
-
-            #Fill everything
-            output[dataset]["mass_total"].fill(mass=ak.ravel(Z_OS.mass))
+            #Output histograms
+            output[dataset]["mass"].fill(mass=Z27_OS.mass)
+            output[dataset]["mass"].fill(mass=Z50_OS.mass)
             
-            output[dataset]["ss_mass_total"].fill(mass=ak.ravel(Z_SS.mass))
+            output[dataset]["ss_mass"].fill(mass=Z27_SS.mass)
+            output[dataset]["ss_mass"].fill(mass=Z50_SS.mass)
             
-            output[dataset]["pt"].fill(pt=ak.ravel(Z_OS.pt))
+            output[dataset]["pt"].fill(pt=Z27_OS.pt)
+            output[dataset]["pt"].fill(pt=Z50_OS.pt)
+            
+            output[dataset]["ss_pt"].fill(pt=Z27_SS.pt)
+            output[dataset]["ss_pt"].fill(pt=Z50_SS.pt)
 
-            output[dataset]["ss_pt"].fill(pt=ak.ravel(Z_SS.pt))
-
-            output[dataset]["eta"].fill(eta=ak.ravel(Z_OS.eta))
-
-            output[dataset]["ss_eta"].fill(eta=ak.ravel(Z_SS.eta))
+            output[dataset]["eta"].fill(eta=Z27_OS.eta)
+            output[dataset]["eta"].fill(eta=Z50_OS.eta)
+            
+            output[dataset]["ss_eta"].fill(eta=Z27_SS.eta)
+            output[dataset]["ss_eta"].fill(eta=Z50_SS.eta)
             return output 
         return output
     def postprocess(self, accumulator):
         return accumulator
 
-
-#dataset is set to 'DYJets' by default but is modified in condor run file
+#Dataset - changes from condor job script
 dataset = 'DYJets'
 
-#All paths
-mc_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/DiMu/2018/MC"
-data_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/DiMu/2018/Data"
+#PATHS
+mc_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2018/MC"
+data_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2018/Data"
 redirector = "root://cmsxrootd.hep.wisc.edu//store/user/gparida/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 redirector2 = "root://cmsxrootd.hep.wisc.edu//store/user/cgalloni/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 
-#SKIMMED ARRAY PATHS (IGNORE)
+#SKIMMED ARRAY PATHS - IGNORE
 DYJetsArr = np.concatenate((
 [mc_path+f"/DY650ToInf/DY650ToInf_{i}.root" for i in range(0, 10)],
 [mc_path+"/DY100To250/0000/DY100To250.root"],
 [mc_path+f"/DY250To400/DY250To400_{i}.root" for i in range(0, 10)],
-[mc_path+f"/DY400To650/DY400To650_{i}.root" for i in range(0, 8)],
-[mc_path+"/DY400To650/NANO_NANO_8.root"],
-[mc_path+"/DY400To650/NANO_NANO_9.root"],
+[mc_path+f"/DY400To650/DY400To650_{i}.root" for i in range(0, 10)],
 [mc_path+"/DY50To100/0000/DY50To100.root"],
 [mc_path+"/DY50To100/0001/DY50To100.root"],
 ))
@@ -547,31 +613,6 @@ DataArr = np.concatenate((
 [data_path+"/Run2018B/0001/Run2018B.root"],
 [data_path+"/Run2018C/0000/Run2018C.root"],
 [data_path+"/Run2018C/0001/Run2018C.root"],
-[data_path+"/Run2018D/0000/Run2018D.root"],
-[data_path+"/Run2018D/0001/Run2018D.root"],
-[data_path+"/Run2018D/0002/Run2018D.root"],
-[data_path+"/Run2018D/0003/Run2018D.root"],
-[data_path+"/Run2018D/0004/Run2018D.root"],
-[data_path+"/Run2018D/0005/Run2018D.root"],
-))
-
-Arr2018A = np.concatenate((
-[data_path+"/Run2018A/0000/Run2018A.root"],
-[data_path+"/Run2018A/0001/Run2018A.root"],
-[data_path+"/Run2018A/0002/Run2018A.root"],
-))
-
-Arr2018B = np.concatenate((
-[data_path+"/Run2018B/0000/Run2018B.root"],
-[data_path+"/Run2018B/0001/Run2018B.root"],
-))
-
-Arr2018C = np.concatenate((
-[data_path+"/Run2018C/0000/Run2018C.root"],
-[data_path+"/Run2018C/0001/Run2018C.root"],
-))
-
-Arr2018D = np.concatenate((
 [data_path+"/Run2018D/0000/Run2018D.root"],
 [data_path+"/Run2018D/0001/Run2018D.root"],
 [data_path+"/Run2018D/0002/Run2018D.root"],
@@ -640,8 +681,7 @@ WJetsArr = np.concatenate((
 [mc_path+"/WJets600To800/0001/WJets600To800.root"],
 ))
 
-
-#UNSKIMMED ARRAY PATHS (WHAT I AM CURRENTLY USING)
+#UNSKIMMED FILE PATHS - CURRENTLY IN USE
 DYJets_unskimmed = np.concatenate((
 [redirector+f"/2018/MC/DYJetsToLL_M-50_HT-70to100_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-70to100_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151736/0000/NANO_NANO_{i}.root" for i in range( 1 , 355 )],
 [redirector+f"/2018/MC/DYJetsToLL_M-50_HT-100to200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/DYJetsToLL_M-50_HT-100to200_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/231225_151751/0000/NANO_NANO_{i}.root" for i in range( 1 , 550 )],
@@ -726,20 +766,14 @@ VV_unskimmed = np.concatenate((
     [redirector+f"/2018/MC/ZZTo4L_TuneCP5_13TeV_powheg_pythia8/ZZTo4L_TuneCP5_13TeV_powheg_pythia8/231225_152835/0001/NANO_NANO_{i}.root" for i in range( 1000 , 1318 )]
 ))
 
-Arr2018A_unskimmed = np.concatenate((
+Data_unskimmed = np.concatenate((
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0000/NANO_NANO_{i}.root" for i in range( 1 , 1000 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0001/NANO_NANO_{i}.root" for i in range( 1000 , 2000 )],
-    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0002/NANO_NANO_{i}.root" for i in range( 2000 , 2963 )],))
-
-Arr2018B_unskimmed = np.concatenate((
+    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0002/NANO_NANO_{i}.root" for i in range( 2000 , 2963 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018B-UL2018_MiniAODv2_GT36-v2/231222_133202/0000/NANO_NANO_{i}.root" for i in range( 1 , 1000 )],
-    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018B-UL2018_MiniAODv2_GT36-v2/231222_133202/0001/NANO_NANO_{i}.root" for i in range( 1000 , 1370 )],))
-
-Arr2018C_unskimmed = np.concatenate((
+    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018B-UL2018_MiniAODv2_GT36-v2/231222_133202/0001/NANO_NANO_{i}.root" for i in range( 1000 , 1370 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018C-UL2018_MiniAODv2_GT36-v3/231222_133222/0000/NANO_NANO_{i}.root" for i in range( 1 , 1000 )],
-    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018C-UL2018_MiniAODv2_GT36-v3/231222_133222/0001/NANO_NANO_{i}.root" for i in range( 1000 , 1297 )],))
-
-Arr2018D_unskimmed = np.concatenate((
+    [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018C-UL2018_MiniAODv2_GT36-v3/231222_133222/0001/NANO_NANO_{i}.root" for i in range( 1000 , 1297 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018D-UL2018_MiniAODv2_GT36-v2/231222_133242/0000/NANO_NANO_{i}.root" for i in range( 1 , 1000 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018D-UL2018_MiniAODv2_GT36-v2/231222_133242/0001/NANO_NANO_{i}.root" for i in range( 1000 , 2000 )],
     [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018D-UL2018_MiniAODv2_GT36-v2/231222_133242/0002/NANO_NANO_{i}.root" for i in range( 2000 , 3000 )],
@@ -749,16 +783,13 @@ Arr2018D_unskimmed = np.concatenate((
 ))
 
 
-#DICTIONARIES FOR EACH FILESET
+#DICTIONARY FOR ALL FILEPATHS
 DYJets_fileset = {
     "DYJets": DYJets_unskimmed.tolist(),
 }
 
 Data_fileset = {
-    "2018A": Arr2018A_unskimmed.tolist(),
-    "2018B": Arr2018B_unskimmed.tolist(),
-    "2018C": Arr2018C_unskimmed.tolist(),
-    "2018D": Arr2018D_unskimmed.tolist(),
+    "Data": Data_unskimmed.tolist(),
 }
 
 TT_fileset = {
@@ -773,12 +804,12 @@ WJets_fileset = {
     "WJets": WJets_unskimmed.tolist(),
 }
 
-#DASK JOB SUBMISSION SPECIFICATIONS
+#DASK JOB SPECIFICATIONS
 MAX_WORKERS = 150
 CHUNKSIZE = 60_000
 MAX_CHUNKS = None
 
-#CREATE EXTRACTOR AND ADD WEIGHT SETS
+#EXTRACT WEIGHT SETS USING COFFEA
 ext = extractor()
 ext.add_weight_sets(["IDCorr NUM_LooseID_DEN_genTracks_pt_abseta ./RunBCDEF_SF_ID.root", "Trg50Corr Mu50_OR_TkMu50_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "Trg27Corr IsoMu24_OR_IsoTkMu24_PtEtaBins/pt_abseta_ratio ./Trigger_EfficienciesAndSF_RunBtoF.root", "IsoCorr NUM_LooseRelIso_DEN_LooseID_pt_abseta ./RunBCDEF_SF_ISO.root", "pTCorr Ratio2D ./zmm_2d_2018.root"])
 ext.finalize()
@@ -787,7 +818,6 @@ evaluator_pu = correctionlib.CorrectionSet.from_file("./puWeights.json")
 f = open('2018_weight.json')
 sumGen = json.load(f)
 print("Extracted weight sets")
-
 
 #CREATE EXECUTOR
 local_executor = processor.IterativeExecutor(status=True)
@@ -804,73 +834,31 @@ runner = processor.Runner(
     xrootdtimeout=300,
 )
 print("Running processor")
-
-#RUN EVENTS
+#RUN PROCESS
 mt_results_local = runner(DYJets_fileset, treename="Events", processor_instance=MyProcessor(),)
 
-#OUTPUT EVERYTHING TO NUMPY HISTOGRAM FILES (dataset SPECIFIED BY JOB SCRIPT)
-if dataset == "Data":
-    outFile = uproot.recreate("boostedHTT_mt_2018_local_DYJets.input.root")
-    for dset in ["2018A", "2018B", "2018C", "2018D",]:
-        outFile["DYJets_met_1_13TeV/" + dset + "_mass"] = mt_results_local[dset]['mass_total'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_ss_mass"] = mt_results_local[dset]['ss_mass_total'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_hcount"] = mt_results_local[dset]['hcount'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_total"] = mt_results_local[dset]['total'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_pt"] = mt_results_local[dset]['pt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_ss_pt"] = mt_results_local[dset]['ss_pt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_eta"] = mt_results_local[dset]['eta'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_ss_eta"] = mt_results_local[dset]['ss_eta'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_MuIDCorr"] = mt_results_local[dset]['IDCorr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_MuIsoCorr"] = mt_results_local[dset]['IsoCorr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_MuTrg27Corr"] = mt_results_local[dset]['Trg27Corr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_MuTrg50Corr"] = mt_results_local[dset]['Trg50Corr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_puCorr"] = mt_results_local[dset]['puCorr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_lepCorr"] = mt_results_local[dset]['lepCorr'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_lumiWeight"] = mt_results_local[dset]['lumiWeight'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_muPt"] = mt_results_local[dset]['muPt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_subMuPt"] = mt_results_local[dset]['subMuPt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_zPt"] = mt_results_local[dset]['zPt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_HiggsPt"] = mt_results_local[dset]['HiggsPt'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_tmass"] = mt_results_local[dset]['tmass'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_numEle_pre"] = mt_results_local[dset]['numEle_pre'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_numEle_post"] = mt_results_local[dset]['numEle_post'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_numMuon_pre"] = mt_results_local[dset]['numMuon_pre'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_numMuon_post"] = mt_results_local[dset]['numMuon_post'].to_numpy()
-        outFile["DYJets_met_1_13TeV/" + dset + "_numbJet"] = mt_results_local[dset]['numbJet'].to_numpy()
-    outFile.close()
-else:
-    outFile = uproot.recreate("boostedHTT_mt_2018_local_DYJets.input.root")
-    outFile["DYJets_met_1_13TeV/" + dataset + "_mass_total"] = mt_results_local[dataset]['mass_total'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_mass_A"] = mt_results_local[dataset]['mass_A'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_mass_B"] = mt_results_local[dataset]['mass_B'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_mass_C"] = mt_results_local[dataset]['mass_C'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_mass_D"] = mt_results_local[dataset]['mass_D'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass_total"] = mt_results_local[dataset]['ss_mass_total'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass_A"] = mt_results_local[dataset]['ss_mass_A'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass_B"] = mt_results_local[dataset]['ss_mass_B'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass_C"] = mt_results_local[dataset]['ss_mass_C'].to_numpy()
-    outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass_D"] = mt_results_local[dataset]['ss_mass_D'].to_numpy()
-    outFile["DYJets_met_1_13TeV/hcount"] = mt_results_local[dataset]['hcount'].to_numpy()
-    outFile["DYJets_met_1_13TeV/total"] = mt_results_local[dataset]['total'].to_numpy()
-    outFile["DYJets_met_1_13TeV/pt"] = mt_results_local[dataset]['pt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/ss_pt"] = mt_results_local[dataset]['ss_pt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/eta"] = mt_results_local[dataset]['eta'].to_numpy()
-    outFile["DYJets_met_1_13TeV/ss_eta"] = mt_results_local[dataset]['ss_eta'].to_numpy()
-    outFile["DYJets_met_1_13TeV/MuIDCorr"] = mt_results_local[dataset]['IDCorr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/MuIsoCorr"] = mt_results_local[dataset]['IsoCorr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/MuTrg27Corr"] = mt_results_local[dataset]['Trg27Corr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/MuTrg50Corr"] = mt_results_local[dataset]['Trg50Corr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/puCorr"] = mt_results_local[dataset]['puCorr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/lepCorr"] = mt_results_local[dataset]['lepCorr'].to_numpy()
-    outFile["DYJets_met_1_13TeV/lumiWeight"] = mt_results_local[dataset]['lumiWeight'].to_numpy()
-    outFile["DYJets_met_1_13TeV/muPt"] = mt_results_local[dataset]['muPt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/subMuPt"] = mt_results_local[dataset]['subMuPt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/zPt"] = mt_results_local[dataset]['zPt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/HiggsPt"] = mt_results_local[dataset]['HiggsPt'].to_numpy()
-    outFile["DYJets_met_1_13TeV/tmass"] = mt_results_local[dataset]['tmass'].to_numpy()
-    outFile["DYJets_met_1_13TeV/numEle_pre"] = mt_results_local[dataset]['numEle_pre'].to_numpy()
-    outFile["DYJets_met_1_13TeV/numEle_post"] = mt_results_local[dataset]['numEle_post'].to_numpy()
-    outFile["DYJets_met_1_13TeV/numMuon_pre"] = mt_results_local[dataset]['numMuon_pre'].to_numpy()
-    outFile["DYJets_met_1_13TeV/numMuon_post"] = mt_results_local[dataset]['numMuon_post'].to_numpy()
-    outFile["DYJets_met_1_13TeV/numbJet"] = mt_results_local[dataset]['numbJet'].to_numpy()
-    outFile.close()
+#OUTPUT TO FILE
+outFile = uproot.recreate("boostedHTT_mt_2018_local_DYJets.input.root")
+outFile["DYJets_met_1_13TeV/" + dataset + "_mass"] = mt_results_local[dataset]['mass'].to_numpy()
+outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass"] = mt_results_local[dataset]['ss_mass'].to_numpy()
+outFile["DYJets_met_1_13TeV/pt"] = mt_results_local[dataset]['pt'].to_numpy()
+outFile["DYJets_met_1_13TeV/ss_pt"] = mt_results_local[dataset]['ss_pt'].to_numpy()
+outFile["DYJets_met_1_13TeV/eta"] = mt_results_local[dataset]['eta'].to_numpy()
+outFile["DYJets_met_1_13TeV/ss_eta"] = mt_results_local[dataset]['ss_eta'].to_numpy()
+outFile["DYJets_met_1_13TeV/MuIDCorr"] = mt_results_local[dataset]['IDCorr'].to_numpy()
+outFile["DYJets_met_1_13TeV/MuIsoCorr"] = mt_results_local[dataset]['IsoCorr'].to_numpy()
+outFile["DYJets_met_1_13TeV/MuTrg27Corr"] = mt_results_local[dataset]['Trg27Corr'].to_numpy()
+outFile["DYJets_met_1_13TeV/MuTrg50Corr"] = mt_results_local[dataset]['Trg50Corr'].to_numpy()
+outFile["DYJets_met_1_13TeV/puCorr"] = mt_results_local[dataset]['puCorr'].to_numpy()
+outFile["DYJets_met_1_13TeV/lepCorr"] = mt_results_local[dataset]['lepCorr'].to_numpy()
+outFile["DYJets_met_1_13TeV/lumiWeight"] = mt_results_local[dataset]['lumiWeight'].to_numpy()
+outFile["DYJets_met_1_13TeV/dr"] = mt_results_local[dataset]['dr'].to_numpy()
+outFile["DYJets_met_1_13TeV/muPt"] = mt_results_local[dataset]['muPt'].to_numpy()
+outFile["DYJets_met_1_13TeV/tauPt"] = mt_results_local[dataset]['tauPt'].to_numpy()
+outFile["DYJets_met_1_13TeV/hcount"] = mt_results_local[dataset]['hcount'].to_numpy()
+outFile["DYJets_met_1_13TeV/total"] = mt_results_local[dataset]['total'].to_numpy()
+outFile["DYJets_met_1_13TeV/zPt"] = mt_results_local[dataset]['zPt'].to_numpy()
+outFile["DYJets_met_1_13TeV/HiggsPt"] = mt_results_local[dataset]['HiggsPt'].to_numpy()
+outFile["DYJets_met_1_13TeV/dr_test"] = mt_results_local[dataset]['dr_test'].to_numpy()
+outFile["DYJets_met_1_13TeV/tmass"] = mt_results_local[dataset]['tmass'].to_numpy()
+outFile.close()

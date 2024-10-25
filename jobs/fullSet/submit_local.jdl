@@ -1,0 +1,26 @@
+universe = vanilla
+Executable = run_local.sh 
++SingularityImage = "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/coffeateam/coffea-dask:0.7.22-py3.10-g7cbcc"
+
+use_x509userproxy = true
+Requirements = OpSys == "LINUX" && (Arch != "DUMMY" )
+request_disk = 4000M
+request_memory = 8000M
+request_cpus = 4
+should_transfer_files = Yes
+transfer_input_files = /nfs_scratch/emettner/jobs/fullSet/LocalSkim.py, /nfs_scratch/emettner/jobs/input/puWeights.json, /nfs_scratch/emettner/jobs/input/RunBCDEF_SF_ISO.root, /nfs_scratch/emettner/jobs/input/Trigger_EfficienciesAndSF_RunBtoF.root, /nfs_scratch/emettner/jobs/input/RunBCDEF_SF_ID.root, /nfs_scratch/emettner/jobs/input/zmm_2d_2018.root, /nfs_scratch/emettner/jobs/input/2018_weight.json
+when_to_transfer_output = ON_EXIT
+myLogFolder = /condor/output
+Output = /nfs_scratch/emettner/jobs/fullSet/$(myLogFolder)/batch_$(cluster)_$(process).stdout
+Error =  /nfs_scratch/emettner/jobs/fullSet/$(myLogFolder)/batch_$(cluster)_$(process).stderr
+Log =    /nfs_scratch/emettner/jobs/fullSet/$(myLogFolder)/batch_$(cluster)_$(process).condor
+Arguments = DYJets
+queue
+Arguments = WJets
+queue
+Arguments = TT
+queue
+Arguments = VV
+queue
+Arguments = Data
+queue
