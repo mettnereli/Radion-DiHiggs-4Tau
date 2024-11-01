@@ -12,7 +12,7 @@ This instruction will be for the files in jobs/fullSet, but jobs/fullSetDiMu sho
 
 Should submit 5 jobs, one for each process. Wait about a day. Then, you will have a file containing all histograms from each proccess. These files can be output for plotting or viewed on their from the root browser!
 
-RUN INSTRUCTIONS FOR LOCAL TESTING: (CURRENTLY ONLY FOR DIUMUON CHANNEL, WORKING ON INTEGRATING MUTAU CHANNEL NOW!)
+RUN INSTRUCTIONS FOR LOCAL TESTING:
 
 1. Go into fullSetDiMu or fullSet
 2. cp LocalAnalysis.py ../../NanoRun #so it is in the same directory as all of the weight files

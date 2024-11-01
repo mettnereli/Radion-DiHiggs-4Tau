@@ -450,10 +450,11 @@ class MyProcessor(processor.ProcessorABC):
             lepCorr_SS = lepCorr[dimuon['i0'].charge + dimuon['i1'].charge != 0]
 
             #Select only between 60 and 120 GeV
-            Z_OS = (Z_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
-            Z_SS = (Z_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
             lepCorr_OS = (lepCorr_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
             lepCorr_SS = (lepCorr_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
+            Z_OS = (Z_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
+            Z_SS = (Z_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
+
 
 
             #Fill all remaining histograms
