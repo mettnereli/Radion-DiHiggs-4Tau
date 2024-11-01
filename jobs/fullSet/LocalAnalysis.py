@@ -419,10 +419,6 @@ class MyProcessor(processor.ProcessorABC):
                 output[dataset]["tauPt"].fill(pt=ak.ravel(tau27.pt), weight=ak.ravel(lumiWeight27))
 
                 Z27 = tau27.add(mu27)
-
-                #Only take events between 0 and 150 GeV mass
-                Z27 = Z27[(Z27.mass < 150)]
-                lumiWeight27 = lumiWeight27[(Z27.mass < 150)]
                 
                 output[dataset]["zPt"].fill(pt= ak.ravel(Z27.pt), weight=ak.ravel(lumiWeight27)) 
                 MuIsoCorr27 = evaluator["IsoCorr"](Z27.pt, Z27.eta)
