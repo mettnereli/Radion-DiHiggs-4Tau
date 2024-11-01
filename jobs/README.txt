@@ -14,12 +14,13 @@ Should submit 5 jobs, one for each process. Wait about a day. Then, you will hav
 
 RUN INSTRUCTIONS FOR LOCAL TESTING: (CURRENTLY ONLY FOR DIUMUON CHANNEL, WORKING ON INTEGRATING MUTAU CHANNEL NOW!)
 
-1. Go into fullSetDiMu
-2. cp LocalAnalysis.py ../../NanoRun, #so it is in the same directory as all of the weight files
-3. bash sourceFile.sh
-4. source .bashrc
-5. cd ../../NanoRun
-5. bash ../jobs/fullSetDiMu/container_start.sh
+1. Go into fullSetDiMu or fullSet
+2. cp LocalAnalysis.py ../../NanoRun #so it is in the same directory as all of the weight files
+3. cd ..
+4. bash sourceFile.sh
+5. source .bashrc
+5. cd ../NanoRun
+6. bash ../jobs/container_start.sh
 6. python3 LocalAnalysis.py
 
 Will output a root file in NanoRun containing histograms.

@@ -23,7 +23,6 @@ import dask
 import correctionlib
 from dask import delayed
 
-
 #Bit mask method (not utilized anymore)
 def bit_mask(bit):
       mask = 0
@@ -453,7 +452,12 @@ class MyProcessor(processor.ProcessorABC):
                 Z27_SS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1], axis=1)
                 lepCorr27_OS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge == 0], axis=1)
                 lepCorr27_SS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge != 0], axis=1)
-
+                
+                
+                lepCorr27_OS = lepCorr27_OS[Z27_OS.mass < 150]
+                lepCorr27_SS = lepCorr27_SS[Z27_SS.mass < 150]
+                Z27_OS = Z27_OS[Z27_OS.mass < 150]
+                Z27_SS = Z27_SS[Z27_SS.mass < 150]
                 
                 #Fill
                 output[dataset]["mass"].fill(mass=Z27_OS.mass, weight=lepCorr27_OS)
@@ -475,9 +479,6 @@ class MyProcessor(processor.ProcessorABC):
                 output[dataset]["tauPt"].fill(pt=ak.ravel(tau50.pt), weight=ak.ravel(lumiWeight50))
                 
                 Z50 = tau50.add(mu50)
-                #Only take events between 0 and 150 GeV mass
-                Z50 = Z50[(Z50.mass < 150)]
-                lumiWeight50 = lumiWeight50[(Z50.mass < 150)]
 
                 
                 output[dataset]["zPt"].fill(pt= ak.ravel(Z50.pt), weight=ak.ravel(lumiWeight50))    
@@ -509,7 +510,11 @@ class MyProcessor(processor.ProcessorABC):
                 lepCorr50_OS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge == 0], axis=1)
                 lepCorr50_SS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge != 0], axis=1)
 
-
+                lepCorr50_OS = lepCorr50_OS[Z50_OS.mass < 150]
+                lepCorr50_SS = lepCorr50_SS[Z50_SS.mass < 150]
+                Z50_OS = Z50_OS[Z50_OS.mass < 150]
+                Z50_SS = Z50_SS[Z50_SS.mass < 150]
+                
                 #Output histograms
                 output[dataset]["mass"].fill(mass=Z50_OS.mass, weight=lepCorr50_OS)
                 output[dataset]["ss_mass"].fill(mass=Z50_SS.mass, weight=lepCorr50_SS)
@@ -552,9 +557,6 @@ class MyProcessor(processor.ProcessorABC):
             Z27 = tau27.add(mu27)
             Z50 = tau50.add(mu50)
 
-            #Keep mass between 0 and 150
-            Z27 = Z27[Z27.mass < 150]
-            Z50 = Z50[Z50.mass < 150]
 
             #Split by sign
             Z27_OS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1], axis=1)
@@ -563,6 +565,11 @@ class MyProcessor(processor.ProcessorABC):
             Z50_OS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1], axis=1)
             Z50_SS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1], axis=1)
 
+            Z27_OS = Z27_OS[Z27_OS.mass < 150]
+            Z27_SS = Z27_SS[Z27_SS.mass < 150]
+            Z50_OS = Z50_OS[Z50_OS.mass < 150]
+            Z50_SS = Z50_SS[Z50_SS.mass < 150]
+            
             #Output histograms
             output[dataset]["mass"].fill(mass=Z27_OS.mass)
             output[dataset]["mass"].fill(mass=Z50_OS.mass)
@@ -587,7 +594,7 @@ class MyProcessor(processor.ProcessorABC):
         return accumulator
 
 #Dataset - changes from condor job script
-dataset = 'DYJets'
+dataset = 'Local'
 
 #PATHS
 mc_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2018/MC"
@@ -595,91 +602,23 @@ data_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2
 redirector = "root://cmsxrootd.hep.wisc.edu//store/user/gparida/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 redirector2 = "root://cmsxrootd.hep.wisc.edu//store/user/cgalloni/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 
-#SKIMMED ARRAY PATHS - IGNORE
-DYJetsArr = np.concatenate((
-[mc_path+f"/DY650ToInf/DY650ToInf_{i}.root" for i in range(0, 10)],
-[mc_path+"/DY100To250/0000/DY100To250.root"],
-[mc_path+f"/DY250To400/DY250To400_{i}.root" for i in range(0, 10)],
-[mc_path+f"/DY400To650/DY400To650_{i}.root" for i in range(0, 10)],
-[mc_path+"/DY50To100/0000/DY50To100.root"],
-[mc_path+"/DY50To100/0001/DY50To100.root"],
+
+#MIXTURE DATASET FOR LOCAL TESTING:
+localArr = np.concatenate((
+[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018B-UL2018_MiniAODv2_GT36-v2/231222_133202/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018C-UL2018_MiniAODv2_GT36-v3/231222_133222/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018D-UL2018_MiniAODv2_GT36-v2/231222_133242/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector+f"/2018/MC/ST_t-channel_top_4f_InclusiveDecays_TuneCP5_13TeV-powheg-madspin-pythia8/ST_t-channel_top_4f_InclusiveDecays_TuneCP5_13TeV-powheg-madspin-pythia8/231225_152342/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector+f"/2018/MC/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/240203_190026/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector+f"/2018/MC/WJetsToLNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8/WJetsToLNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8/231225_151948/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133710/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )], 
 ))
 
-DataArr = np.concatenate((
-[data_path+"/Run2018A/0000/Run2018A.root"],
-[data_path+"/Run2018A/0001/Run2018A.root"],
-[data_path+"/Run2018A/0002/Run2018A.root"],
-[data_path+"/Run2018B/0000/Run2018B.root"],
-[data_path+"/Run2018B/0001/Run2018B.root"],
-[data_path+"/Run2018C/0000/Run2018C.root"],
-[data_path+"/Run2018C/0001/Run2018C.root"],
-[data_path+"/Run2018D/0000/Run2018D.root"],
-[data_path+"/Run2018D/0001/Run2018D.root"],
-[data_path+"/Run2018D/0002/Run2018D.root"],
-[data_path+"/Run2018D/0003/Run2018D.root"],
-[data_path+"/Run2018D/0004/Run2018D.root"],
-[data_path+"/Run2018D/0005/Run2018D.root"],
-))
+local_fileset = {
+    "Local": localArr.tolist()
+}
 
-TTArr = np.concatenate((
-[mc_path+"/TTTo2L2Nu/0000/TTTo2L2Nu.root"],
-[mc_path+"/TTTo2L2Nu/0001/TTTo2L2Nu.root"],
-[mc_path+"/TTTo2L2Nu/0002/TTTo2L2Nu.root"],
-[mc_path+"/TTTo2L2Nu/0003/TTTo2L2Nu.root"],
-[mc_path+"/TTToHadronic/0000/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0001/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0002/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0003/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0004/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0005/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0006/TTToHadronic.root"],
-[mc_path+"/TTToHadronic/0007/TTToHadronic.root"],
-[mc_path+"/TTToSemiLeptonic/0000/TTToSemiLeptonic.root"],
-[mc_path+"/TTToSemiLeptonic/0001/TTToSemiLeptonic.root"],
-[mc_path+"/TTToSemiLeptonic/0002/TTToSemiLeptonic.root"],
-[mc_path+"/TTToSemiLeptonic/0003/TTToSemiLeptonic.root"],
-[mc_path+"/TTToSemiLeptonic/0004/TTToSemiLeptonic.root"],
-[mc_path+"/TTToSemiLeptonic/0005/TTToSemiLeptonic.root"],
-))
-
-VVArr = np.concatenate((
-[mc_path+"/ST_tW_top_5f_inclusiveDecays/ST_tW_top_5f_inclusiveDecays.root"],
-[mc_path+"/WZTo2Q2L/WZTo2Q2L.root"],
-[mc_path+"/ST_s-channel_4f_leptonDecays/ST_s-channel_4f_leptonDecays.root"],
-[mc_path+"/ZZTo2Nu2Q/ZZTo2Nu2Q.root"],
-[mc_path+"/ST_t-channel_antitop_4f_InclusiveDecays/0000/ST_t-channel_antitop_4f_InclusiveDecays.root"],
-[mc_path+"/ST_t-channel_antitop_4f_InclusiveDecays/0001/ST_t-channel_antitop_4f_InclusiveDecays.root"],
-[mc_path+"/WWTo1L1Nu2Q/WWTo1L1Nu2Q.root"],
-[mc_path+"/ZZTo2Q2L/ZZTo2Q2L.root"],
-[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0000/ST_t-channel_top_4f_InclusiveDecays.root"],
-[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0001/ST_t-channel_top_4f_InclusiveDecays.root"],
-[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0002/ST_t-channel_top_4f_InclusiveDecays.root"],
-[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0003/ST_t-channel_top_4f_InclusiveDecays.root"],
-[mc_path+"/WZTo1L1Nu2Q/WZTo1L1Nu2Q.root"],
-[mc_path+"/ZZTo4L/0000/ZZTo4L.root"],
-[mc_path+"/ZZTo4L/0001/ZZTo4L.root"], 
-[mc_path+"/ST_tW_antitop_5f_inclusiveDecays/ST_tW_antitop_5f_inclusiveDecays.root"],
-[mc_path+"/WZTo1L3Nu/WZTo1L3Nu.root"],
-))
-
-WJetsArr = np.concatenate((
-[mc_path+f"/WJets1200To2500/0000/WJets1200To2500_{i}.root" for i in range(0, 10)],
-[mc_path+f"/WJets1200To2500/0001/WJets1200To2500_{i}.root" for i in range(0, 10)],
-[mc_path+"/WJets70To100/0000/WJets70To100.root"],
-[mc_path+"/WJets70To100/0001/WJets70To100.root"],
-[mc_path+"/WJets200To400/0000/WJets200To400.root"],
-[mc_path+"/WJets200To400/0001/WJets200To400.root"],
-[mc_path+"/WJets800To1200/0000/WJets800To1200.root"],
-[mc_path+"/WJets800To1200/0001/WJets800To1200.root"],
-[mc_path+f"/WJets2500ToInf/0000/WJets2500ToInf_{i}.root" for i in range(0, 10)],
-[mc_path+f"/WJets2500ToInf/0001/WJets2500ToInf_{i}.root" for i in range(0, 10)],
-[mc_path+"/WJets400To600/0000/WJets400To600.root"],
-[mc_path+"/WJets400To600/0001/WJets400To600.root"],
-[mc_path+"/WJets100To200/0000/WJets100To200.root"],
-[mc_path+"/WJets100To200/0001/WJets100To200.root"],
-[mc_path+"/WJets600To800/0000/WJets600To800.root"],
-[mc_path+"/WJets600To800/0001/WJets600To800.root"],
-))
 
 #UNSKIMMED FILE PATHS - CURRENTLY IN USE
 DYJets_unskimmed = np.concatenate((
@@ -835,10 +774,10 @@ runner = processor.Runner(
 )
 print("Running processor")
 #RUN PROCESS
-mt_results_local = runner(DYJets_fileset, treename="Events", processor_instance=MyProcessor(),)
+mt_results_local = runner(local_fileset, treename="Events", processor_instance=MyProcessor(),)
 
 #OUTPUT TO FILE
-outFile = uproot.recreate("boostedHTT_mt_2018_local_DYJets.input.root")
+outFile = uproot.recreate("boostedHTT_mt_2018_local_Local.input.root")
 outFile["DYJets_met_1_13TeV/" + dataset + "_mass"] = mt_results_local[dataset]['mass'].to_numpy()
 outFile["DYJets_met_1_13TeV/" + dataset + "_ss_mass"] = mt_results_local[dataset]['ss_mass'].to_numpy()
 outFile["DYJets_met_1_13TeV/pt"] = mt_results_local[dataset]['pt'].to_numpy()
