@@ -50,14 +50,14 @@ def weightCalc(name):
       elif "ST_tW_antitop_5f_inclusiveDecays" in name: return 32.51
       elif "ST_tW_top_5f_inclusiveDecays" in name: return 32.45
       elif "DY" in name:
-         if "70to100" in name: return 140
-         elif "100to200" in name: return 139.2
-         elif "200to400" in name: return 38.4
-         elif "400to600" in name: return 5.174
-         elif "600to800" in name: return 1.258
-         elif "800to1200" in name: return 0.5598
-         elif "1200to2500" in name: return 0.1305
-         elif "2500toInf" in name: return 0.002997
+         if "70To100" in name: return 140
+         elif "100To200" in name: return 139.2
+         elif "200To400" in name: return 38.4
+         elif "400To600" in name: return 5.174
+         elif "600To800" in name: return 1.258
+         elif "800To1200" in name: return 0.5598
+         elif "1200To2500" in name: return 0.1305
+         elif "2500ToInf" in name: return 0.002997
          elif "0To50" in name: return 1485
          elif "50To100" in name: return 397.4
          elif "100To250" in name: return 97.2
@@ -98,14 +98,14 @@ def sumGenCalc(name):
     elif "ST_tW_antitop_5f_inclusiveDecays" in name: return sumGen['ST_tW_antitop_5f_inclusiveDecays']
     elif "ST_tW_top_5f_inclusiveDecays" in name: return sumGen['ST_tW_top_5f_inclusiveDecays']
     elif "DY" in name:
-        if "70to100" in name: return sumGen['DYJetsToLL_M-50_HT-70to100']
-        elif "100to200" in name: return sumGen['DYJetsToLL_M-50_HT-100to200']
-        elif "200to400" in name: return sumGen['DYJetsToLL_M-50_HT-200to400']
-        elif "400to600" in name: return sumGen['DYJetsToLL_M-50_HT-400to600']
-        elif "600to800" in name: return sumGen['DYJetsToLL_M-50_HT-600to800']
-        elif "800to1200" in name: return sumGen['DYJetsToLL_M-50_HT-800to1200']
-        elif "1200to2500" in name: return sumGen['DYJetsToLL_M-50_HT-1200to2500']
-        elif "2500toInf" in name: return sumGen['DYJetsToLL_M-50_HT-2500toInf']
+        if "70To100" in name: return sumGen['DYJetsToLL_M-50_HT-70to100']
+        elif "100To200" in name: return sumGen['DYJetsToLL_M-50_HT-100to200']
+        elif "200To400" in name: return sumGen['DYJetsToLL_M-50_HT-200to400']
+        elif "400To600" in name: return sumGen['DYJetsToLL_M-50_HT-400to600']
+        elif "600To800" in name: return sumGen['DYJetsToLL_M-50_HT-600to800']
+        elif "800To1200" in name: return sumGen['DYJetsToLL_M-50_HT-800to1200']
+        elif "1200To2500" in name: return sumGen['DYJetsToLL_M-50_HT-1200to2500']
+        elif "2500ToInf" in name: return sumGen['DYJetsToLL_M-50_HT-2500toInf']
         elif "0To50" in name: return 2455892442182.9556
         elif "50To100" in name: return 578496149642.9556
         elif "100To250" in name: return 47895381724.01761
@@ -223,9 +223,10 @@ class MyProcessor(processor.ProcessorABC):
             "tauPt": Hist(hist.axis.Regular(50, 29, 200, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
             "total": Hist(hist.axis.Regular(2, 0, 2, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
             "hcount": Hist(hist.axis.Regular(12, 0, 12, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
-            "tmass": Hist(hist.axis.Regular(150, 0, 150, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
+            "tmass": Hist(hist.axis.Regular(50, 0, 50, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
             "zPt": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
-            "HiggsPt": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight())
+            "HiggsPt": Hist(hist.axis.Regular(100, 200, 450, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
+            "MET": Hist(hist.axis.Regular(100, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
         }      
         #Fill histograms (starting with total number of events)
         output[dataset]["total"].fill(count= np.ones(len(events)))
@@ -327,7 +328,6 @@ class MyProcessor(processor.ProcessorABC):
         events = events[ak.num(pairs, axis=-1) > 0]       
         pairs = pairs[ak.num(pairs, axis=-1) > 0] 
         output[dataset]["hcount"].fill(count= np.ones(len(events))* 8)
-        output[dataset]["tmass"].fill(mass=ak.ravel(tmass))
 
         #ZVec pt cut
         muon = makeVector(pairs['muon'])
@@ -368,7 +368,6 @@ class MyProcessor(processor.ProcessorABC):
         events = events[ak.num(pairs, axis=-1) > 0]       
         pairs = pairs[ak.num(pairs, axis=-1) > 0] 
         output[dataset]["hcount"].fill(count= np.ones(len(events))* 10)
-        output[dataset]["HiggsPt"].fill(pt= ak.ravel(Higgs.pt)) 
         
         #Create Z Candidate and select one Z Candidate per event
         muon = makeVector(pairs['muon'])
@@ -379,213 +378,145 @@ class MyProcessor(processor.ProcessorABC):
             #Select whichever Z Candidate has closest mass to 91.187, and make sure dimuon keeps that too
             ZVec = ZVec[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
             pairs = pairs[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
+            events = events[ak.num(pairs, axis=1) > 0]
 
-        #Split events by trigger - if between 27 and 52 pt and passing isolation, then it is Mu27. Any pt >= 52 if Mu50
-        trg27 = ((pairs['muon'].pt >= 27)
-              & (pairs['muon'].pt < 52)
-              & (pairs['muon'].pfRelIso04_all > .3))
-        trg50 = ((pairs['muon'].pt >= 52))
+        
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 11 )
+
+        mu = makeVector(pairs['muon'])    
+        tau = makeVector(pairs['tau'])
+
+        #Create Z Vecs
+        Z = mu.add(tau)
 
         #Get weights
         if XSection != 1: 
-            #Apply trigger
-            pairs27 = pairs[trg27]
-            pairs50 = pairs[trg50]
-
-            #Split by trigger 
-            events27 = events[ak.num(pairs27, axis=1) > 0]       
-            pairs27 = pairs[ak.num(pairs27, axis=1) > 0] 
-
-            events50 = events[ak.num(pairs50, axis=1) > 0]       
-            pairs50 = pairs[ak.num(pairs50, axis=1) > 0] 
-
-            output[dataset]["hcount"].fill(count= np.ones(len(events27))* 11 )
-            output[dataset]["hcount"].fill(count= np.ones(len(events50))* 11 )
-
-
-            #Luminosity reweighting
             luminosity2018 = 59830.
-            lumiWeight27 = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events27.genWeight)
-            lumiWeight50 = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events50.genWeight)
+            #Luminosity weight - XSection / sumOfGenWeights, multiplied by the genWeight for each event
+            lumiWeight = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events.genWeight)
 
-            #If statement to make sure that that there are still events that pass Mu27
-            if len(events27.genWeight) > 0:
-                #Fill weights for Mu27
-                output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight27))
-                mu27 = makeVector(pairs27['muon'])
-                tau27 = makeVector(pairs27['tau'])
-
-                output[dataset]["muPt"].fill(pt=ak.ravel(mu27.pt), weight=ak.ravel(lumiWeight27))
-                output[dataset]["tauPt"].fill(pt=ak.ravel(tau27.pt), weight=ak.ravel(lumiWeight27))
-
-                Z27 = tau27.add(mu27)
-                
-                output[dataset]["zPt"].fill(pt= ak.ravel(Z27.pt), weight=ak.ravel(lumiWeight27)) 
-                MuIsoCorr27 = evaluator["IsoCorr"](Z27.pt, Z27.eta)
-                output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr27))
-
-                MuIDCorr27 = evaluator["IDCorr"](Z27.pt, Z27.eta)
-                output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr27))
-
-                Mu27TrgCorr = evaluator["Trg27Corr"](Z27.pt, Z27.eta)
-                output[dataset]["Trg27Corr"].fill(Trg27Corr = ak.ravel(Mu27TrgCorr))
-
-                puTrue27 = np.array(np.rint(events27.Pileup.nTrueInt), dtype=np.int8)
-                puWeight27 = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue27, 'nominal')
-                output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight27))
-
-                #Combine weights for Mu27
-                lepCorr_27 = MuIsoCorr27 * MuIDCorr27 * Mu27TrgCorr * puWeight27 * lumiWeight27 
-                if ("DYJets" in name): 
-                    pTCorrection27 = evaluator["pTCorr"](Z27.mass, Z27.pt)
-                    lepCorr_27 = lepCorr_27 * pTCorrection27
-                    
-                output[dataset]["lepCorr"].fill(lepCorr=ak.ravel(lepCorr_27))
-
-                
-                #Split by sign
-                Z27_OS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1], axis=1)
-                Z27_SS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1], axis=1)
-                lepCorr27_OS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge == 0], axis=1)
-                lepCorr27_SS = ak.flatten(lepCorr_27[pairs27['muon'].charge + pairs27['tau'].charge != 0], axis=1)
-                
-                
-                lepCorr27_OS = lepCorr27_OS[Z27_OS.mass < 150]
-                lepCorr27_SS = lepCorr27_SS[Z27_SS.mass < 150]
-                Z27_OS = Z27_OS[Z27_OS.mass < 150]
-                Z27_SS = Z27_SS[Z27_SS.mass < 150]
-                
-                #Fill
-                output[dataset]["mass"].fill(mass=Z27_OS.mass, weight=lepCorr27_OS)
-                output[dataset]["ss_mass"].fill(mass=Z27_SS.mass, weight=lepCorr27_SS)
-                output[dataset]["pt"].fill(pt=Z27_OS.pt, weight=lepCorr27_OS)
-                output[dataset]["ss_pt"].fill(pt=Z27_SS.pt, weight=lepCorr27_SS)
-                output[dataset]["eta"].fill(eta=Z27_OS.eta, weight=lepCorr27_OS)
-                output[dataset]["ss_eta"].fill(eta=Z27_SS.eta, weight=lepCorr27_SS)
-
-            #If statement to make sure that that there are still events that pass Mu50
-            if len(events50.genWeight) > 0:
-                #Fill weights
-                output[dataset]["lumiWeight"].fill(lumiWeight=ak.ravel(lumiWeight50))
-    
-                mu50 = makeVector(pairs50['muon'])      
-                tau50 = makeVector(pairs50['tau'])  
-    
-                output[dataset]["muPt"].fill(pt=ak.ravel(mu50.pt), weight=ak.ravel(lumiWeight50))
-                output[dataset]["tauPt"].fill(pt=ak.ravel(tau50.pt), weight=ak.ravel(lumiWeight50))
-                
-                Z50 = tau50.add(mu50)
-
-                
-                output[dataset]["zPt"].fill(pt= ak.ravel(Z50.pt), weight=ak.ravel(lumiWeight50))    
-                MuIsoCorr50 = evaluator["IsoCorr"](Z50.pt, Z50.eta)
-                output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr50))
-                
-                MuIDCorr50 = evaluator["IDCorr"](Z50.pt, Z50.eta)
-                output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr50))
-                 
-                Mu50TrgCorr = evaluator["Trg50Corr"](Z50.pt, Z50.eta)
-                output[dataset]["Trg50Corr"].fill(Trg50Corr= ak.ravel(Mu50TrgCorr))
-                
-                puTrue50 = np.array(np.rint(events50.Pileup.nTrueInt), dtype=np.int8)
-                puWeight50 = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue50, 'nominal')
-                output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight50))
-
-                #Combine all weights
-                lepCorr_50 = MuIsoCorr50 * MuIDCorr50 * Mu50TrgCorr * puWeight50 * lumiWeight50
-                #Add pTCorrection if DYJets
-                if ("DYJets" in name): 
-                    pTCorrection50 = evaluator["pTCorr"](Z50.mass, Z50.pt)
-                    lepCorr_50 = lepCorr_50 * pTCorrection50
-    
-                output[dataset]["lepCorr"].fill(lepCorr=ak.ravel(lepCorr_50))
-
-                #Split by sign
-                Z50_OS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1], axis=1)
-                Z50_SS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1], axis=1)
-                lepCorr50_OS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge == 0], axis=1)
-                lepCorr50_SS = ak.flatten(lepCorr_50[pairs50['muon'].charge + pairs50['tau'].charge != 0], axis=1)
-
-                lepCorr50_OS = lepCorr50_OS[Z50_OS.mass < 150]
-                lepCorr50_SS = lepCorr50_SS[Z50_SS.mass < 150]
-                Z50_OS = Z50_OS[Z50_OS.mass < 150]
-                Z50_SS = Z50_SS[Z50_SS.mass < 150]
-                
-                #Output histograms
-                output[dataset]["mass"].fill(mass=Z50_OS.mass, weight=lepCorr50_OS)
-                output[dataset]["ss_mass"].fill(mass=Z50_SS.mass, weight=lepCorr50_SS)
-                output[dataset]["pt"].fill(pt=Z50_OS.pt, weight=lepCorr50_OS)
-                output[dataset]["ss_pt"].fill(pt=Z50_SS.pt, weight=lepCorr50_SS)
-                output[dataset]["eta"].fill(eta=Z50_OS.eta, weight=lepCorr50_OS)
-                output[dataset]["ss_eta"].fill(eta=Z50_SS.eta, weight=lepCorr50_SS)
-            return output 
-        else: #If Data (XSection = 1)
-            #Apply trigger
-            pairs27 = pairs[trg27]
-            pairs50 = pairs[trg50]
-
-            #Separate by trigger
-            events27 = events[ak.num(pairs27, axis=1) > 0]       
-            pairs27 = pairs[ak.num(pairs27, axis=1) > 0] 
-
-            events50 = events[ak.num(pairs50, axis=1) > 0]       
-            pairs50 = pairs[ak.num(pairs50, axis=1) > 0] 
-
-            output[dataset]["hcount"].fill(count= np.ones(len(events27))* 11 )
-            output[dataset]["hcount"].fill(count= np.ones(len(events50))* 11 )
+            #Fill weight into histogram (note: ak.ravel removes extra nesting so it's just a 1D array of all events for fill)         
+            MuIsoCorr = evaluator["IsoCorr"](Z.pt, Z.eta)
+            output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr))
             
-
+            MuIDCorr = evaluator["IDCorr"](Z.pt, Z.eta)
+            output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr))
             
-            mu27 = makeVector(pairs27['muon'])
-            mu50 = makeVector(pairs50['muon'])      
-            tau27 = makeVector(pairs27['tau'])
-            tau50 = makeVector(pairs50['tau'])  
-
-            output[dataset]["muPt"].fill(pt=ak.ravel(mu27.pt))
-            output[dataset]["muPt"].fill(pt=ak.ravel(mu50.pt))
-            output[dataset]["tauPt"].fill(pt=ak.ravel(tau27.pt))
-            output[dataset]["tauPt"].fill(pt=ak.ravel(tau50.pt))
-
-            output[dataset]["dr"].fill(dr=ak.ravel(tau27.delta_r(mu27)))
-            output[dataset]["dr"].fill(dr=ak.ravel(tau50.delta_r(mu50)))
-
-            #Create Z Vecs
-            Z27 = tau27.add(mu27)
-            Z50 = tau50.add(mu50)
-
-
-            #Split by sign
-            Z27_OS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1], axis=1)
-            Z27_SS = ak.flatten(Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1], axis=1)
-
-            Z50_OS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1], axis=1)
-            Z50_SS = ak.flatten(Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1], axis=1)
-
-            Z27_OS = Z27_OS[Z27_OS.mass < 150]
-            Z27_SS = Z27_SS[Z27_SS.mass < 150]
-            Z50_OS = Z50_OS[Z50_OS.mass < 150]
-            Z50_SS = Z50_SS[Z50_SS.mass < 150]
+            Mu50TrgCorr = evaluator["Trg50Corr"](Z.pt, Z.eta)
+            output[dataset]["Trg50Corr"].fill(Trg50Corr= ak.ravel(Mu50TrgCorr))
             
-            #Output histograms
-            output[dataset]["mass"].fill(mass=Z27_OS.mass)
-            output[dataset]["mass"].fill(mass=Z50_OS.mass)
-            
-            output[dataset]["ss_mass"].fill(mass=Z27_SS.mass)
-            output[dataset]["ss_mass"].fill(mass=Z50_SS.mass)
-            
-            output[dataset]["pt"].fill(pt=Z27_OS.pt)
-            output[dataset]["pt"].fill(pt=Z50_OS.pt)
-            
-            output[dataset]["ss_pt"].fill(pt=Z27_SS.pt)
-            output[dataset]["ss_pt"].fill(pt=Z50_SS.pt)
+            puTrue = np.array(np.rint(events.Pileup.nTrueInt), dtype=np.int8)
+            puWeight = evaluator_pu["Collisions18_UltraLegacy_goldenJSON"].evaluate(puTrue, 'nominal')
+            output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight))
 
-            output[dataset]["eta"].fill(eta=Z27_OS.eta)
-            output[dataset]["eta"].fill(eta=Z50_OS.eta)
+            #Combine all weighting arrays together
+            lepCorr = MuIsoCorr * MuIDCorr * lumiWeight * puWeight
+
+            #Also at pTCorrection if DYJets bkg
+            if ("DYJets" in name): 
+                pTCorrection = evaluator["pTCorr"](Z.mass, Z.pt)
+                lepCorr = lepCorr * pTCorrection
+
+            output[dataset]["lepCorr"].fill(lepCorr=(ak.ravel(lepCorr)))
+        else: #This is if Data
+            lepCorr = ak.ones_like(Z.mass)
+
+        output[dataset]["muPt"].fill(pt=ak.ravel(mu.pt), weight=ak.ravel(lepCorr))
+        output[dataset]["tauPt"].fill(pt=ak.ravel(tau.pt), weight=ak.ravel(lepCorr))
+        
+        output[dataset]["dr"].fill(dr=ak.ravel(mu.delta_r(tau)), weight=ak.ravel(lepCorr))
+
+        if len(events.MET) == 0: return output
+        if len(events.MET.pt) == 0: return output   
+        #Create MET Vector
+        MetVec =  ak.zip(
+        {
+        "pt": events.MET.pt,
+        "eta": 0,
+        "phi": events.MET.phi,
+        "mass": 0,
+        },
+        with_name="PtEtaPhiMLorentzVector",
+        behavior=vector.behavior,
+        ) 
+
+        Higgs = Z.add(MetVec)
+        output[dataset]["HiggsPt"].fill(pt= ak.ravel(Higgs.pt), weight=ak.ravel(lepCorr)) 
+        output[dataset]["MET"].fill(pt= ak.ravel(events.MET.pt), weight=ak.ravel(lepCorr)) 
+        tmass = np.sqrt(np.square(mu.pt + events.MET.pt) - np.square(mu.px + events.MET.pt * np.cos(events.MET.phi)) - np.square(mu.py + events.MET.pt * np.sin(events.MET.phi)))
+        output[dataset]["tmass"].fill(mass=ak.ravel(tmass), weight=ak.ravel(lepCorr))
+        
+        #Split events by trigger - if between 27 and 52 pt and passing isolation, then it is Mu27. Any pt >= 52 if Mu50
+        trg27 = (pairs['muon'].pt >= 27) & (pairs['muon'].pt < 52) & (pairs['muon'].pfRelIso04_all > .3)
+        trg50 = ((pairs['muon'].pt >= 52))        
+
+        Z27 = Z[trg27]
+        Z50 = Z[trg50]
+        pairs27 = pairs[trg27]
+        pairs50 = pairs[trg50]
+
+        
+        Mu50TrgCorr = evaluator["Trg50Corr"](Z50.pt, Z50.eta)
+        output[dataset]["Trg50Corr"].fill(Trg50Corr= ak.ravel(Mu50TrgCorr))
+
+        Mu27TrgCorr = evaluator["Trg27Corr"](Z27.pt, Z27.eta)
+        output[dataset]["Trg27Corr"].fill(Trg27Corr = ak.ravel(Mu27TrgCorr))
+
+        if XSection != 1:
+            lepCorr_27 = lepCorr[trg27] * Mu27TrgCorr
+            lepCorr_50 = lepCorr[trg50] * Mu50TrgCorr
+        else:
+            lepCorr_27 = lepCorr
+            lepCorr_50 = lepCorr          
             
-            output[dataset]["ss_eta"].fill(eta=Z27_SS.eta)
-            output[dataset]["ss_eta"].fill(eta=Z50_SS.eta)
-            return output 
-        return output
+        
+        #Split by sign
+        Z27_OS = Z27[pairs27['muon'].charge * pairs27['tau'].charge == -1]
+        Z27_SS = Z27[pairs27['muon'].charge * pairs27['tau'].charge != -1]
+
+        Z50_OS = Z50[pairs50['muon'].charge * pairs50['tau'].charge == -1]
+        Z50_SS = Z50[pairs50['muon'].charge * pairs50['tau'].charge != -1]
+
+        lepCorr_27OS = lepCorr_27[pairs27['muon'].charge * pairs27['tau'].charge == -1]
+        lepCorr_27SS = lepCorr_27[pairs27['muon'].charge * pairs27['tau'].charge != -1]
+
+        lepCorr_50OS = lepCorr_50[pairs50['muon'].charge * pairs50['tau'].charge == -1]
+        lepCorr_50SS = lepCorr_50[pairs50['muon'].charge * pairs50['tau'].charge != -1]
+        
+        Z27_OS = Z27_OS[Z27_OS.mass < 150]
+        Z27_SS = Z27_SS[Z27_SS.mass < 150]
+        Z50_OS = Z50_OS[Z50_OS.mass < 150]
+        Z50_SS = Z50_SS[Z50_SS.mass < 150]
+
+        lepCorr_27OS = lepCorr_27OS[Z27_OS.mass < 150]
+        lepCorr_27SS = lepCorr_27SS[Z27_SS.mass < 150]
+        lepCorr_50OS = lepCorr_50OS[Z50_OS.mass < 150]
+        lepCorr_50SS = lepCorr_50SS[Z50_SS.mass < 150]
+        
+        #Output histograms
+        output[dataset]["mass"].fill(mass=ak.ravel(Z27_OS.mass), weight=ak.ravel(lepCorr_27OS))
+        output[dataset]["mass"].fill(mass=ak.ravel(Z50_OS.mass), weight=ak.ravel(lepCorr_50OS))
+        
+        output[dataset]["ss_mass"].fill(mass=ak.ravel(Z27_SS.mass), weight=ak.ravel(lepCorr_27SS))
+        output[dataset]["ss_mass"].fill(mass=ak.ravel(Z50_SS.mass), weight=ak.ravel(lepCorr_50SS))
+        
+        output[dataset]["pt"].fill(pt=ak.ravel(Z27_OS.pt), weight=ak.ravel(lepCorr_27OS))
+        output[dataset]["pt"].fill(pt=ak.ravel(Z50_OS.pt), weight=ak.ravel(lepCorr_50OS))
+        
+        output[dataset]["ss_pt"].fill(pt=ak.ravel(Z27_SS.pt), weight=ak.ravel(lepCorr_27SS))
+        output[dataset]["ss_pt"].fill(pt=ak.ravel(Z50_SS.pt), weight=ak.ravel(lepCorr_50SS))
+
+        output[dataset]["eta"].fill(eta=ak.ravel(Z27_OS.eta), weight=ak.ravel(lepCorr_27OS))
+        output[dataset]["eta"].fill(eta=ak.ravel(Z50_OS.eta), weight=ak.ravel(lepCorr_50OS))
+        
+        output[dataset]["ss_eta"].fill(eta=ak.ravel(Z27_SS.eta), weight=ak.ravel(lepCorr_27SS))
+        output[dataset]["ss_eta"].fill(eta=ak.ravel(Z50_SS.eta), weight=ak.ravel(lepCorr_50SS))
+
+
+
+
+        
+        return output 
     def postprocess(self, accumulator):
         return accumulator
 
@@ -594,6 +525,7 @@ dataset = 'Local'
 
 #PATHS
 mc_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2018/MC"
+mc_pathDY = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/MuTau/2018/MC"
 data_path = "root://cmsxrootd.hep.wisc.edu//store/user/emettner/Radion/Skimmed/2018/Data"
 redirector = "root://cmsxrootd.hep.wisc.edu//store/user/gparida/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
 redirector2 = "root://cmsxrootd.hep.wisc.edu//store/user/cgalloni/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_23"
@@ -614,6 +546,112 @@ localArr = np.concatenate((
 local_fileset = {
     "Local": localArr.tolist()
 }
+
+#SKIMMED ARRAYS
+DYJetsArr_skimmed = np.concatenate((
+[mc_pathDY+f"/DY70To100/DY70To100.root"],
+[mc_pathDY+f"/DY100To200/DY100To200.root"],
+[mc_pathDY+f"/DY200To400/DY200To400.root"],
+[mc_pathDY+f"/DY400To600/DY400To600.root"],
+[mc_pathDY+f"/DY600To800/DY600To800.root"],
+[mc_pathDY+f"/DY800To1200/DY800To1200.root"],
+[mc_pathDY+f"/DY1200To2500/DY1200To2500.root"],
+[mc_pathDY+f"/DY2500ToInf/DY2500ToInf.root"],
+))
+
+DataArr = np.concatenate((
+[data_path+"/Run2018A/0000/Run2018A.root"],
+[data_path+"/Run2018A/0001/Run2018A.root"],
+[data_path+"/Run2018A/0002/Run2018A.root"],
+[data_path+"/Run2018B/0000/Run2018B.root"],
+[data_path+"/Run2018B/0001/Run2018B.root"],
+[data_path+"/Run2018C/0000/Run2018C.root"],
+[data_path+"/Run2018C/0001/Run2018C.root"],
+[data_path+"/Run2018D/0000/Run2018D.root"],
+[data_path+"/Run2018D/0001/Run2018D.root"],
+[data_path+"/Run2018D/0002/Run2018D.root"],
+[data_path+"/Run2018D/0003/Run2018D.root"],
+[data_path+"/Run2018D/0004/Run2018D.root"],
+[data_path+"/Run2018D/0005/Run2018D.root"],
+))
+
+DataArr_skimmed = np.concatenate((
+[data_path+f"/Run2018A/0000/NANO_NANO_{i}.root" for i in range(0, 999)],
+[data_path+f"/Run2018A/0001/NANO_NANO_{i}.root" for i in range(0, 1000)],
+[data_path+f"/Run2018A/0002/NANO_NANO_{i}.root" for i in range(0, 963)],
+[data_path+f"/Run2018B/0000/NANO_NANO_{i}.root" for i in range(0, 999)],
+[data_path+f"/Run2018B/0001/NANO_NANO_{i}.root" for i in range(0, 370)],
+[data_path+f"/Run2018C/0000/NANO_NANO_{i}.root" for i in range(0, 999)],
+[data_path+f"/Run2018C/0001/NANO_NANO_{i}.root" for i in range(0, 297)],
+[data_path+f"/Run2018D/0000/NANO_NANO_{i}.root" for i in range(0, 999)],
+[data_path+f"/Run2018D/0001/NANO_NANO_{i}.root" for i in range(0, 1000)],
+[data_path+f"/Run2018D/0002/NANO_NANO_{i}.root" for i in range(0, 1000)],
+[data_path+f"/Run2018D/0003/NANO_NANO_{i}.root" for i in range(0, 1000)],
+[data_path+f"/Run2018D/0004/NANO_NANO_{i}.root" for i in range(0, 1000)],
+[data_path+f"/Run2018D/0005/NANO_NANO_{i}.root" for i in range(0, 591)],
+))
+
+TTArr_skimmed = np.concatenate((
+[mc_path+"/TTTo2L2Nu/0000/TTTo2L2Nu.root"],
+[mc_path+"/TTTo2L2Nu/0001/TTTo2L2Nu.root"],
+[mc_path+"/TTTo2L2Nu/0002/TTTo2L2Nu.root"],
+[mc_path+"/TTTo2L2Nu/0003/TTTo2L2Nu.root"],
+[mc_path+"/TTToHadronic/0000/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0001/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0002/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0003/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0004/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0005/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0006/TTToHadronic.root"],
+[mc_path+"/TTToHadronic/0007/TTToHadronic.root"],
+[mc_path+"/TTToSemiLeptonic/0000/TTToSemiLeptonic.root"],
+[mc_path+"/TTToSemiLeptonic/0001/TTToSemiLeptonic.root"],
+[mc_path+"/TTToSemiLeptonic/0002/TTToSemiLeptonic.root"],
+[mc_path+"/TTToSemiLeptonic/0003/TTToSemiLeptonic.root"],
+[mc_path+"/TTToSemiLeptonic/0004/TTToSemiLeptonic.root"],
+[mc_path+"/TTToSemiLeptonic/0005/TTToSemiLeptonic.root"],
+))
+VVArr_skimmed = np.concatenate((
+[mc_path+"/ST_tW_top_5f_inclusiveDecays/ST_tW_top_5f_inclusiveDecays.root"],
+[mc_path+"/WZTo2Q2L/WZTo2Q2L.root"],
+[mc_path+"/ST_s-channel_4f_leptonDecays/ST_s-channel_4f_leptonDecays.root"],
+[mc_path+"/ZZTo2Nu2Q/ZZTo2Nu2Q.root"],
+[mc_path+"/ST_t-channel_antitop_4f_InclusiveDecays/0000/ST_t-channel_antitop_4f_InclusiveDecays.root"],
+[mc_path+"/ST_t-channel_antitop_4f_InclusiveDecays/0001/ST_t-channel_antitop_4f_InclusiveDecays.root"],
+[mc_path+"/WWTo1L1Nu2Q/WWTo1L1Nu2Q.root"],
+[mc_path+"/ZZTo2Q2L/ZZTo2Q2L.root"],
+[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0000/ST_t-channel_top_4f_InclusiveDecays.root"],
+[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0001/ST_t-channel_top_4f_InclusiveDecays.root"],
+[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0002/ST_t-channel_top_4f_InclusiveDecays.root"],
+[mc_path+"/ST_t-channel_top_4f_InclusiveDecays/0003/ST_t-channel_top_4f_InclusiveDecays.root"],
+[mc_path+"/WZTo1L1Nu2Q/WZTo1L1Nu2Q.root"],
+[mc_path+"/ZZTo4L/0000/ZZTo4L.root"],
+[mc_path+"/ZZTo4L/0001/ZZTo4L.root"], 
+[mc_path+"/ST_tW_antitop_5f_inclusiveDecays/ST_tW_antitop_5f_inclusiveDecays.root"],
+[mc_path+"/WZTo1L3Nu/WZTo1L3Nu.root"],
+))
+WJetsArr_skimmed = np.concatenate((
+[mc_path+f"/WJets1200To2500/0000/WJets1200To2500_{i}.root" for i in range(0, 10)],
+[mc_path+f"/WJets1200To2500/0001/WJets1200To2500_{i}.root" for i in range(0, 10)],
+[mc_path+"/WJets70To100/0000/WJets70To100.root"],
+[mc_path+"/WJets70To100/0001/WJets70To100.root"],
+[mc_path+"/WJets200To400/0000/WJets200To400.root"],
+[mc_path+"/WJets200To400/0001/WJets200To400.root"],
+[mc_path+"/WJets800To1200/0000/WJets800To1200.root"],
+[mc_path+"/WJets800To1200/0001/WJets800To1200.root"],
+[mc_path+f"/WJets2500ToInf/0000/WJets2500ToInf_{i}.root" for i in range(0, 10)],
+[mc_path+f"/WJets2500ToInf/0001/WJets2500ToInf_{i}.root" for i in range(0, 10)],
+[mc_path+"/WJets400To600/0000/WJets400To600.root"],
+[mc_path+"/WJets400To600/0001/WJets400To600.root"],
+[mc_path+"/WJets100To200/0000/WJets100To200.root"],
+[mc_path+"/WJets100To200/0001/WJets100To200.root"],
+[mc_path+"/WJets600To800/0000/WJets600To800.root"],
+[mc_path+"/WJets600To800/0001/WJets600To800.root"],
+))
+
+
+
+
 
 
 #UNSKIMMED FILE PATHS - CURRENTLY IN USE
@@ -720,23 +758,23 @@ Data_unskimmed = np.concatenate((
 
 #DICTIONARY FOR ALL FILEPATHS
 DYJets_fileset = {
-    "DYJets": DYJets_unskimmed.tolist(),
+    "DYJets": DYJetsArr_skimmed.tolist(),
 }
 
 Data_fileset = {
-    "Data": Data_unskimmed.tolist(),
+    "Data": DataArr_skimmed.tolist(),
 }
 
 TT_fileset = {
-    "TT": TT_unskimmed.tolist(),
+    "TT": TTArr_skimmed.tolist(),
 }
 
 VV_fileset = {
-    "VV": VV_unskimmed.tolist(),
+    "VV": VVArr_skimmed.tolist(),
 }
 
 WJets_fileset = {
-    "WJets": WJets_unskimmed.tolist(),
+    "WJets": WJetsArr_skimmed.tolist(),
 }
 
 #DASK JOB SPECIFICATIONS
@@ -794,6 +832,6 @@ outFile["DYJets_met_1_13TeV/hcount"] = mt_results_local[dataset]['hcount'].to_nu
 outFile["DYJets_met_1_13TeV/total"] = mt_results_local[dataset]['total'].to_numpy()
 outFile["DYJets_met_1_13TeV/zPt"] = mt_results_local[dataset]['zPt'].to_numpy()
 outFile["DYJets_met_1_13TeV/HiggsPt"] = mt_results_local[dataset]['HiggsPt'].to_numpy()
-outFile["DYJets_met_1_13TeV/dr_test"] = mt_results_local[dataset]['dr_test'].to_numpy()
+outFile["DYJets_met_1_13TeV/MET"] = mt_results_local[dataset]['MET'].to_numpy()
 outFile["DYJets_met_1_13TeV/tmass"] = mt_results_local[dataset]['tmass'].to_numpy()
 outFile.close()
