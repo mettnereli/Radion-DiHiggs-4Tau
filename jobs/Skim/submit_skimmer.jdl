@@ -1,0 +1,17 @@
+universe = vanilla
+Executable = run_skimmer.sh 
++SingularityImage = "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/coffeateam/coffea-dask:0.7.22-py3.10-g7cbcc"
+
+use_x509userproxy = true
+Requirements = OpSys == "LINUX" && (Arch != "DUMMY" )
+request_disk = 4000M
+request_memory = 4000M
+request_cpus = 1
+should_transfer_files = Yes
+transfer_input_files = $(filename), skimDownDiMu.py
+when_to_transfer_output = ON_EXIT
+myLogFolder = condor/output
+Output = ./$(myLogFolder)/batch_$(cluster)_$(process).stdout
+Error =  ./$(myLogFolder)/batch_$(cluster)_$(process).stderr
+Log =    ./$(myLogFolder)/batch_$(cluster)_$(process).condor
+Arguments = $(filename) $(ProcID)
