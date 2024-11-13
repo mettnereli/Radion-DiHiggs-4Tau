@@ -1,7 +1,7 @@
 Instructions for running jobs (login.hep.wisc.edu and condor):
 This instruction will be for the files in jobs/fullSet, but jobs/fullSetDiMu should be the same.
 
-1. Go to your preferred working area (I have been using nfs_sratch)
+1. Go to your preferred working area (I have been using nfs_scratch)
 2. Create your own "fullSet" and "fullSetDiMu" directories and move the files from this repo into them respectively
 3. Create a dir  "condor/output" in both directories (line 13 in submit_local.jdl)
 4. You must edit "submit_local.jdl":
@@ -10,7 +10,7 @@ This instruction will be for the files in jobs/fullSet, but jobs/fullSetDiMu sho
   line 14-16: modify this if your condor/output directory is different
 5. "condor_submit submit_local.jdl"
 
-Should submit 5 jobs, one for each process. Wait about a day. Then, you will have a file containing all histograms from each proccess. These files can be output for plotting or viewed on their from the root browser!
+Should submit 5 jobs, one for each process. If running over skimmed+merged files, will take around 10-20 minutes, skimmed files 8 hour, unskimmed files 24 hours. If you would like to change the fileset you are running on, modify the dictionaries between lines 757-775 with your array list of filepaths. Output will give you 5 files containing all histograms from each proccess. These files can be output for plotting or viewed on their from the root browser!
 
 RUN INSTRUCTIONS FOR LOCAL TESTING:
 
@@ -25,3 +25,5 @@ RUN INSTRUCTIONS FOR LOCAL TESTING:
 
 Will output a root file in NanoRun containing histograms.
   
+
+NOTE: Running locally will run over the files put into the "localArr" (line 509). Feel free to input your own desired files there, following the same format. The output of local testing won't tell us much but hopefully it will be useful debugging/cmdline outputs.

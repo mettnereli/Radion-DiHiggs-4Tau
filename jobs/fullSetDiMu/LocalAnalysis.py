@@ -217,7 +217,7 @@ class MyProcessor(processor.ProcessorABC):
             "lepCorr": Hist(hist.axis.Regular(100, -2, 2, flow=False, name="lepCorr", label=dataset), storage=hist.storage.Weight()),
             "muPt": Hist(hist.axis.Regular(50, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
             "subMuPt": Hist(hist.axis.Regular(50, 0, 400, flow=False, name="pt", label=dataset), storage=hist.storage.Weight()),
-            "hcount": Hist(hist.axis.Regular(12, 0, 12, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
+            "hcount": Hist(hist.axis.Regular(13, 0, 13, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
             "total": Hist(hist.axis.Regular(12, 0, 12, flow=False, name="count", label=dataset), storage=hist.storage.Weight()),
             "tmass": Hist(hist.axis.Regular(50, 0, 50, flow=False, name="mass", label=dataset), storage=hist.storage.Weight()),
             "dr": Hist(hist.axis.Regular(40, 0, 1, flow=False, name="dr", label=dataset), storage=hist.storage.Weight()),
@@ -233,10 +233,11 @@ class MyProcessor(processor.ProcessorABC):
 
         #Fill histograms (starting with total number of events)
         output[dataset]["total"].fill(count= np.ones(len(events)))
-
+        output[dataset]["hcount"].fill(count= np.ones(len(events)))
+        
         #Get name
         name = str(events.metadata["filename"])
-
+        print(name)
         #Get XS Value
         XSection = weightCalc(name)
 
@@ -306,12 +307,12 @@ class MyProcessor(processor.ProcessorABC):
         
     
         #Jet Vetos - HT
-        goodJets= events.Jet[(events.Jet.jetId >= 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 3.0)]
-        HT = ak.sum(goodJets.pt, axis=-1)
-        dimuon = dimuon[(HT > 200)]
-        events = events[(ak.num(dimuon, axis=-1) > 0)]
-        dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
-        output[dataset]["hcount"].fill(count= np.ones(len(events))* 5)
+       # goodJets= events.Jet[(events.Jet.jetId >= 1) & (events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 3.0)]
+       # HT = ak.sum(goodJets.pt, axis=-1)
+       # dimuon = dimuon[(HT > 200)]
+       # events = events[(ak.num(dimuon, axis=-1) > 0)]
+       # dimuon = dimuon[(ak.num(dimuon, axis=-1) > 0)]
+       # output[dataset]["hcount"].fill(count= np.ones(len(events))* 5)
 
         
         ##!!!!!!!!!!!!!!! change btagdeepflavb for each year https://btv-wiki.docs.cern.ch/ScaleFactors/UL2018/
@@ -389,7 +390,10 @@ class MyProcessor(processor.ProcessorABC):
             ZVec = ZVec[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
             dimuon = dimuon[ak.argmin(np.absolute(ZVec.mass - 91.187), axis=-1, keepdims=True)]
             events = events[ak.num(dimuon, axis=1) > 0]
-             
+            #check multiplicty
+            #zmass > 15 
+        output[dataset]["hcount"].fill(count= np.ones(len(events))* 10)
+        
         #Make new vectors
         i0 = makeVector(dimuon['i0'])
         i1 = makeVector(dimuon['i1'])   
@@ -397,14 +401,14 @@ class MyProcessor(processor.ProcessorABC):
         
         ##Get weights if not Data (if data, XSection = 1)
         if XSection != 1:             
-
+            print("Not data!")
             luminosity2018 = 59830.
             #Luminosity weight - XSection / sumOfGenWeights, multiplied by the genWeight for each event
             lumiWeight = np.multiply(((XSection * luminosity2018) / sumOfGenWeights), events.genWeight)
 
             #Fill weight into histogram (note: ak.ravel removes extra nesting so it's just a 1D array of all events for fill)         
-            MuIsoCorr = evaluator["IsoCorr"](Z.pt, Z.eta)
-            output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr))
+            #MuIsoCorr = evaluator["IsoCorr"](Z.pt, Z.eta)
+            #output[dataset]["IsoCorr"].fill(isoCorr=ak.ravel(MuIsoCorr))
             
             MuIDCorr = evaluator["IDCorr"](Z.pt, Z.eta)
             output[dataset]["IDCorr"].fill(IDCorr=ak.ravel(MuIDCorr))
@@ -417,7 +421,7 @@ class MyProcessor(processor.ProcessorABC):
             output[dataset]["puCorr"].fill(puCorr=ak.ravel(puWeight))
 
             #Combine all weighting arrays together
-            lepCorr = MuIsoCorr * MuIDCorr * Mu50TrgCorr * lumiWeight * puWeight
+            lepCorr = MuIDCorr * Mu50TrgCorr * lumiWeight * puWeight
 
             #Also at pTCorrection if DYJets bkg
             if ("DYJets" in name): 
@@ -426,6 +430,7 @@ class MyProcessor(processor.ProcessorABC):
 
             output[dataset]["lepCorr"].fill(lepCorr=(ak.ravel(lepCorr)))
         else: #This is if Data
+            print("Data!")
             lepCorr = ak.ones_like(Z.mass)
              
         output[dataset]["muPt"].fill(pt=ak.ravel(i0.pt), weight=ak.ravel(lepCorr))
@@ -460,13 +465,16 @@ class MyProcessor(processor.ProcessorABC):
         lepCorr_OS = lepCorr[dimuon['i0'].charge + dimuon['i1'].charge == 0]
         lepCorr_SS = lepCorr[dimuon['i0'].charge + dimuon['i1'].charge != 0]
 
+        output[dataset]["hcount"].fill(count= np.ones(len(Z_OS.mass))* 11)
+
+        
         #Select only between 60 and 120 GeV
         Z_OS = (Z_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
         Z_SS = (Z_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
         lepCorr_OS = (lepCorr_OS[(Z_OS.mass > 60) & (Z_OS.mass < 120)])
         lepCorr_SS = (lepCorr_SS[(Z_SS.mass > 60) & (Z_SS.mass < 120)])
 
-
+        output[dataset]["hcount"].fill(count= np.ones(len(Z_OS.mass))* 12)
         #Fill all remaining histograms
         output[dataset]["mass"].fill(mass=ak.ravel(Z_OS.mass), weight=ak.ravel(lepCorr_OS))
         
@@ -499,14 +507,14 @@ hdfspath = "/hdfs/store/user/gparida/HHbbtt/Full_Production_CMSSW_13_0_13_Nov24_
 
 #MIXTURE DATASET FOR LOCAL TESTING:
 localArr = np.concatenate((
-[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
+[redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133710/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )], 
+[redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018A-UL2018_MiniAODv2_GT36-v2/231222_133142/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )], 
 [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018B-UL2018_MiniAODv2_GT36-v2/231222_133202/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
 [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018C-UL2018_MiniAODv2_GT36-v3/231222_133222/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
 [redirector2+f"/2018/Data/SingleMu/SingleMuon/Run2018D-UL2018_MiniAODv2_GT36-v2/231222_133242/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
 [redirector+f"/2018/MC/ST_t-channel_top_4f_InclusiveDecays_TuneCP5_13TeV-powheg-madspin-pythia8/ST_t-channel_top_4f_InclusiveDecays_TuneCP5_13TeV-powheg-madspin-pythia8/231225_152342/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
 [redirector+f"/2018/MC/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/240203_190026/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
 [redirector+f"/2018/MC/WJetsToLNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8/WJetsToLNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8/231225_151948/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )],
-[redirector+f"/2018/MC/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/DYJetsToLL_LHEFilterPtZ-250To400_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/240704_133710/0000/NANO_NANO_{i}.root" for i in range( 1 , 3 )], 
 ))
 
 local_fileset = {
@@ -541,21 +549,33 @@ DataArr_skimmed = np.concatenate((
 [data_path+f"/Run2018D/0004/NANO_NANO_{i}.root" for i in range(0, 1000)],
 [data_path+f"/Run2018D/0005/NANO_NANO_{i}.root" for i in range(0, 591)],
 ))
-'''
-Arr2018A_skimmed = np.concatenate((
+
+
+
+DataArr_addedSkimmedSplit = np.concatenate((
+[data_path+f"/Run2018A/0000/Run2018A_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018A/0001/Run2018A_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018A/0002/Run2018A_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018B/0000/Run2018B_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018B/0001/Run2018B_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018C/0000/Run2018C_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018C/0001/Run2018C_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0000/Run2018D_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0001/Run2018D_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0002/Run2018D_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0003/Run2018D_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0004/Run2018D_{i}.root" for i in range(0, 10)],
+[data_path+f"/Run2018D/0005/Run2018D_{i}.root" for i in range(0, 10)],
+))
+
+DataArr_addedSkimmed = np.concatenate((
 [data_path+f"/Run2018A/0000/Run2018A.root"],
 [data_path+f"/Run2018A/0001/Run2018A.root"],
 [data_path+f"/Run2018A/0002/Run2018A.root"],
-))
-Arr2018B_skimmed = np.concatenate((
 [data_path+f"/Run2018B/0000/Run2018B.root"],
 [data_path+f"/Run2018B/0001/Run2018B.root"],
-))
-Arr2018C_skimmed = np.concatenate((
 [data_path+f"/Run2018C/0000/Run2018C.root"],
 [data_path+f"/Run2018C/0001/Run2018C.root"],
-))
-Arr2018D_skimmed = np.concatenate((
 [data_path+f"/Run2018D/0000/Run2018D.root"],
 [data_path+f"/Run2018D/0001/Run2018D.root"],
 [data_path+f"/Run2018D/0002/Run2018D.root"],
@@ -563,7 +583,7 @@ Arr2018D_skimmed = np.concatenate((
 [data_path+f"/Run2018D/0004/Run2018D.root"],
 [data_path+f"/Run2018D/0005/Run2018D.root"],
 ))
-'''
+
 TTArr_skimmed = np.concatenate((
 [mc_path+"/TTTo2L2Nu/0000/TTTo2L2Nu.root"],
 [mc_path+"/TTTo2L2Nu/0001/TTTo2L2Nu.root"],
@@ -739,7 +759,7 @@ DYJets_fileset = {
 }
 
 Data_fileset = {
-    "Data": DataArr_skimmed.tolist(),
+    "Data": DataArr_addedSkimmed.tolist(),
 }
 
 TT_fileset = {
@@ -755,8 +775,8 @@ WJets_fileset = {
 }
 
 #DASK JOB SUBMISSION SPECIFICATIONS
-MAX_WORKERS = 150
-CHUNKSIZE = 60_000
+MAX_WORKERS = 50
+CHUNKSIZE = 250_000
 MAX_CHUNKS = None
 
 #CREATE EXTRACTOR AND ADD WEIGHT SETS
