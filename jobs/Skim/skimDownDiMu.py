@@ -47,8 +47,8 @@ events = NanoEventsFactory.from_root(
 count = len(events)
 hcount = np.ones(count)
 hcount_hist = np.histogram(hcount, bins=1)
-genWeights = ak.sum(events.genWeight)
-sumGenw = np.histogram(genWeights, bins=1)
+#genWeights = ak.sum(events.genWeight)
+#sumGenw = np.histogram(genWeights, bins=1)
 
 
 events = events[(ak.num(events.Muon) > 1)]
@@ -66,4 +66,4 @@ events = events[(ak.num(pairs, axis=-1) > 0)]
 with uproot.recreate('NANO_NANO_l.root') as fout:   
     fout["Events"] = uproot_writeable(events)
     fout["hcount"] = hcount_hist
-    fout["sumGenw"] = sumGenw
+#    fout["sumGenw"] = sumGenw
