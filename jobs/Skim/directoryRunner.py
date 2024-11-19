@@ -29,7 +29,7 @@ for (path, rootd) in zip(data_dir, data_orig):
     else: back = path
     print("Background: ", back)
 
-    os.chdir(mc_path + back)
+    os.chdir(data_path + path)
     os.system("mkdir condor")
     os.chdir("./condor")
     os.system("mkdir output")
